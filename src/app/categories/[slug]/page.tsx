@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -17,7 +17,35 @@ import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useCartStore from '@/store/cartStore'
 import toast from 'react-hot-toast'
 
-const getProductIcon = (categoryName) => {
+interface Product {
+  id: string
+  slug: string
+  name: string
+  description: string
+  price: number
+  compareAt?: number | null
+  discountPercent: number
+  stock: number
+  inStock: boolean
+  images?: string[]
+  weight?: number | null
+  unit?: string | null
+  tags?: string[]
+  category?: {
+    name: string
+    slug: string
+  } | null
+}
+
+interface Category {
+  id: string
+  name: string
+  description: string
+  slug: string
+  image?: string
+}
+
+const getProductIcon = (categoryName?: string) => {
   switch (categoryName) {
     case 'Ghee': return '🧈'
     case 'Oils': return '🫒'
@@ -28,7 +56,7 @@ const getProductIcon = (categoryName) => {
   }
 }
 
-const getCategoryColor = (categoryName) => {
+const getCategoryColor = (categoryName?: string) => {
   switch (categoryName) {
     case 'Ghee': return 'from-yellow-100 to-yellow-200'
     case 'Oils': return 'from-green-100 to-green-200'
@@ -47,11 +75,16 @@ const sortOptions = [
   { name: 'Newest First', value: 'createdAt-desc' },
 ]
 
-function ProductCard({ product, viewMode = 'grid' }) {
+interface ProductCardProps {
+  product: Product
+  viewMode?: 'grid' | 'list'
+}
+
+function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
   const [isLiked, setIsLiked] = useState(false)
   const { addItem } = useCartStore()
 
-  const handleAddToCart = (e) => {
+  const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     if (!product.inStock) {
@@ -59,11 +92,11 @@ function ProductCard({ product, viewMode = 'grid' }) {
       return
     }
     
-    addItem(product)
+    addItem({ ...product, quantity: 1 } as any)
     toast.success('Added to cart!')
   }
 
-  const toggleLike = (e) => {
+  const toggleLike = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
     setIsLiked(!isLiked)
@@ -257,10 +290,10 @@ export default function CategoryPage() {
   
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('name-asc')
-  const [viewMode, setViewMode] = useState('grid')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [onlyInStock, setOnlyInStock] = useState(false)
-  const [category, setCategory] = useState(null)
-  const [products, setProducts] = useState([])
+  const [category, setCategory] = useState<Category | null>(null)
+  const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 0 })
 
@@ -271,8 +304,10 @@ export default function CategoryPage() {
       const categoryResponse = await fetch('/api/categories')
       if (!categoryResponse.ok) throw new Error('Failed to fetch categories')
       
-      const categories = await categoryResponse.json()
-      const foundCategory = categories.find(cat => cat.slug === slug)
+      const categoryResult = await categoryResponse.json()
+      // Handle the wrapped API response
+      const categories = categoryResult.success ? categoryResult.data : []
+      const foundCategory = categories.find((cat: Category) => cat.slug === slug)
       
       if (!foundCategory) {
         notFound()
@@ -285,7 +320,7 @@ export default function CategoryPage() {
       const params = new URLSearchParams({
         page: '1',
         limit: '50',
-        categorySlug: slug,
+        categorySlug: slug as string,
         sortBy: sortBy.split('-')[0],
         sortOrder: sortBy.includes('-desc') ? 'desc' : 'asc',
         ...(searchQuery && { search: searchQuery }),
@@ -296,7 +331,7 @@ export default function CategoryPage() {
       if (!productsResponse.ok) throw new Error('Failed to fetch products')
       
       const data = await productsResponse.json()
-      setProducts(data.products || [])
+      setProducts(data.data || [])
       setPagination(data.pagination || { page: 1, total: 0, pages: 0 })
     } catch (error) {
       console.error('Error fetching data:', error)

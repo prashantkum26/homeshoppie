@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import type { ApiResponse, PaginatedResponse } from '@/types'
+import type { ApiResponse, PaginatedResponse, Product } from '@/types'
 
 interface ProductCreateInput {
   name: string
@@ -212,7 +212,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PaginatedR
     })
 
     // Transform products to include computed fields
-    const transformedProducts: ProductWithCategory[] = products.map(product => ({
+    const transformedProducts: ProductWithCategory[] = products.map((product: Product) => ({
       id: product.id,
       name: product.name,
       slug: product.slug,

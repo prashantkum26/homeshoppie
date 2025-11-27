@@ -266,7 +266,7 @@ async function main() {
 
         const { categoryName, ...productWithoutCategoryName } = productData
         
-        const product = await prisma.product.upsert({
+        await prisma.product.upsert({
           where: { slug: productData.slug },
           update: {
             ...productWithoutCategoryName,

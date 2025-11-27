@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -19,7 +19,39 @@ import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useCartStore from '@/store/cartStore'
 import toast from 'react-hot-toast'
 
-const getProductIcon = (categoryName) => {
+interface Product {
+  id: string
+  slug: string
+  name: string
+  description: string
+  price: number
+  compareAt?: number | null
+  discountPercent: number
+  stock: number
+  inStock: boolean
+  images?: string[]
+  weight?: number | null
+  unit?: string | null
+  tags?: string[]
+  category?: {
+    name: string
+    slug: string
+  } | null
+  relatedProducts?: Array<{
+    id: string
+    slug?: string
+    name: string
+    price: number
+    compareAt?: number | null
+    discountPercent: number
+    inStock: boolean
+    category?: {
+      name: string
+    } | null
+  }>
+}
+
+const getProductIcon = (categoryName?: string) => {
   switch (categoryName) {
     case 'Ghee': return '🧈'
     case 'Oils': return '🫒'
@@ -34,7 +66,7 @@ export default function ProductPage() {
   const params = useParams()
   const { id } = params
   
-  const [product, setProduct] = useState(null)
+  const [product, setProduct] = useState<Product | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
   const [isLiked, setIsLiked] = useState(false)
@@ -72,7 +104,7 @@ export default function ProductPage() {
   }, [id])
 
   const handleAddToCart = () => {
-    if (!product.inStock) {
+    if (!product?.inStock) {
       toast.error('Product is out of stock')
       return
     }
@@ -87,6 +119,8 @@ export default function ProductPage() {
   }
 
   const handleShare = async () => {
+    if (!product) return
+    
     try {
       if (navigator.share) {
         await navigator.share({

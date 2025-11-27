@@ -34,13 +34,11 @@ export async function GET(
   try {
     const { id } = await params
     
+    // Check if the id is a valid MongoDB ObjectId (24 hex characters)
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(id)
+    
     const product = await prisma.product.findFirst({
-      where: { 
-        OR: [
-          { id: id },
-          { slug: id }
-        ]
-      },
+      where: isObjectId ? { id: id } : { slug: id },
       include: {
         category: {
           select: { name: true, slug: true }

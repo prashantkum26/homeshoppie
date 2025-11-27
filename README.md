@@ -311,6 +311,8 @@ To Run Local:
 
     mongod --dbpath "C:/data/db" --replSet rs0
 
+    winget install MongoDB.Shell
+
     mongosh:
 
         rs.initiate()

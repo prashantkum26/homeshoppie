@@ -220,7 +220,7 @@ describe('/api/products', () => {
       mockPrisma.product.findMany.mockResolvedValue([mockProducts[0]])
 
       const request = new NextRequest('http://localhost:3000/api/products?search=Product%201&page=1&limit=10')
-      const response = await GET(request)
+      await GET(request)
 
       expect(mockPrisma.product.findMany).toHaveBeenCalledWith({
         where: {
@@ -247,7 +247,7 @@ describe('/api/products', () => {
       mockPrisma.product.findMany.mockResolvedValue([mockProducts[0]])
 
       const request = new NextRequest('http://localhost:3000/api/products?minPrice=50&maxPrice=100')
-      const response = await GET(request)
+      await GET(request)
 
       // Note: Current API implementation has a bug where maxPrice overwrites minPrice condition
       // This should be fixed to support both gte and lte in the same query
@@ -272,7 +272,7 @@ describe('/api/products', () => {
       mockPrisma.product.findMany.mockResolvedValue([mockProducts[0]])
 
       const request = new NextRequest('http://localhost:3000/api/products?categorySlug=electronics')
-      const response = await GET(request)
+      await GET(request)
 
       expect(mockPrisma.product.findMany).toHaveBeenCalledWith({
         where: {

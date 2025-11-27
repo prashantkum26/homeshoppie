@@ -1,18 +1,18 @@
 import { NextRequest } from 'next/server'
 import { GET } from '../route'
-import { prisma } from '@/lib/prisma'
 
 // Mock Prisma
+const mockFindUnique = jest.fn()
+const mockFindMany = jest.fn()
+
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     product: {
-      findUnique: jest.fn(),
-      findMany: jest.fn(),
+      findUnique: mockFindUnique,
+      findMany: mockFindMany,
     },
   },
 }))
-
-const mockPrisma = prisma as jest.Mocked<typeof prisma>
 
 describe('/api/products/[id] - GET', () => {
   beforeEach(() => {
@@ -53,8 +53,8 @@ describe('/api/products/[id] - GET', () => {
   ]
 
   it('should return product by id successfully', async () => {
-    mockPrisma.product.findUnique.mockResolvedValue(mockProduct as any)
-    mockPrisma.product.findMany.mockResolvedValue(mockRelatedProducts as any)
+    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -65,28 +65,28 @@ describe('/api/products/[id] - GET', () => {
     expect(data.inStock).toBe(true)
     expect(data.discountPercent).toBe(17) // (120-100)/120 * 100 = 16.67 rounded to 17
     expect(data.relatedProducts).toHaveLength(1)
-    expect(mockPrisma.product.findUnique).toHaveBeenCalledWith({
+    expect(mockFindUnique).toHaveBeenCalledWith({
       where: { OR: [{ id: '1' }, { slug: '1' }] },
       include: { category: { select: { name: true, slug: true } } },
     })
   })
 
   it('should return product by slug successfully', async () => {
-    mockPrisma.product.findUnique.mockResolvedValue(mockProduct as any)
-    mockPrisma.product.findMany.mockResolvedValue(mockRelatedProducts as any)
+    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/test-product')
     const response = await GET(request, { params: Promise.resolve({ id: 'test-product' }) })
 
     expect(response.status).toBe(200)
-    expect(mockPrisma.product.findUnique).toHaveBeenCalledWith({
+    expect(mockFindUnique).toHaveBeenCalledWith({
       where: { OR: [{ id: 'test-product' }, { slug: 'test-product' }] },
       include: { category: { select: { name: true, slug: true } } },
     })
   })
 
   it('should return 404 when product not found', async () => {
-    mockPrisma.product.findUnique.mockResolvedValue(null)
+    mockFindUnique.mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost/api/products/nonexistent')
     const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) })
@@ -98,7 +98,7 @@ describe('/api/products/[id] - GET', () => {
 
   it('should return 404 when product is inactive', async () => {
     const inactiveProduct = { ...mockProduct, isActive: false }
-    mockPrisma.product.findUnique.mockResolvedValue(inactiveProduct as any)
+    mockFindUnique.mockResolvedValue(inactiveProduct as any)
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -110,8 +110,8 @@ describe('/api/products/[id] - GET', () => {
 
   it('should handle products without compareAt price', async () => {
     const productWithoutCompareAt = { ...mockProduct, compareAt: null }
-    mockPrisma.product.findUnique.mockResolvedValue(productWithoutCompareAt as any)
-    mockPrisma.product.findMany.mockResolvedValue([])
+    mockFindUnique.mockResolvedValue(productWithoutCompareAt as any)
+    mockFindMany.mockResolvedValue([])
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -123,8 +123,8 @@ describe('/api/products/[id] - GET', () => {
 
   it('should handle out-of-stock products', async () => {
     const outOfStockProduct = { ...mockProduct, stock: 0 }
-    mockPrisma.product.findUnique.mockResolvedValue(outOfStockProduct as any)
-    mockPrisma.product.findMany.mockResolvedValue([])
+    mockFindUnique.mockResolvedValue(outOfStockProduct as any)
+    mockFindMany.mockResolvedValue([])
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -135,7 +135,7 @@ describe('/api/products/[id] - GET', () => {
   })
 
   it('should return 500 on database error', async () => {
-    mockPrisma.product.findUnique.mockRejectedValue(new Error('Database error'))
+    mockFindUnique.mockRejectedValue(new Error('Database error'))
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -146,14 +146,14 @@ describe('/api/products/[id] - GET', () => {
   })
 
   it('should fetch related products correctly', async () => {
-    mockPrisma.product.findUnique.mockResolvedValue(mockProduct as any)
-    mockPrisma.product.findMany.mockResolvedValue(mockRelatedProducts as any)
+    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
     const data = await response.json()
 
-    expect(mockPrisma.product.findMany).toHaveBeenCalledWith({
+    expect(mockFindMany).toHaveBeenCalledWith({
       where: {
         categoryId: 'cat1',
         id: { not: '1' },
