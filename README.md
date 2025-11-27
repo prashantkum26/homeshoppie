@@ -300,3 +300,17 @@ For support and questions:
 ---
 
 **Happy Shopping with HomeShoppie! 🛒**
+
+
+
+
+
+To Run Local:
+
+    net stop MongoDB
+
+    mongod --dbpath "C:/data/db" --replSet rs0
+
+    mongosh:
+
+        rs.initiate()
