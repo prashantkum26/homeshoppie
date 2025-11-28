@@ -73,10 +73,10 @@ export default function HeroSection() {
         <div className="flex items-center h-full">
           <div className="w-full md:w-1/2 pr-8">
             <div className="animate-fadeIn">
-              <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-4">
+              <h1 className="text-hero text-gray-900 mb-6">
                 {heroSlides[currentSlide].title}
               </h1>
-              <h2 className="text-xl md:text-2xl text-primary-600 font-semibold mb-6">
+              <h2 className="text-subtitle text-primary-600 mb-8">
                 {heroSlides[currentSlide].subtitle}
               </h2>
               <p className="text-lg text-gray-600 mb-8 leading-relaxed">

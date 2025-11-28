@@ -109,7 +109,26 @@ export default function ProductPage() {
       return
     }
     
-    addItem({ ...product, quantity })
+    // Create cart item with proper Product structure for the store
+    const productForCart = {
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      price: product.price,
+      compareAt: product.compareAt ?? null,
+      stock: product.stock,
+      images: product.images || [],
+      categoryId: product.category?.slug || 'general',
+      isActive: true,
+      weight: product.weight ?? null,
+      unit: product.unit ?? null,
+      tags: product.tags || [],
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+    
+    addItem(productForCart)
     toast.success(`Added ${quantity} ${quantity === 1 ? 'item' : 'items'} to cart!`)
   }
 
@@ -194,7 +213,28 @@ export default function ProductPage() {
           {/* Product Images */}
           <div>
             <div className="aspect-square bg-gray-100 rounded-lg mb-4 overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+              {product.images && product.images.length > 0 ? (
+                // Display actual product image
+                <img
+                  src={`/api/public/images/${product.images[selectedImageIndex]?.replace('/api/images/', '').replace('/api/admin/images/', '')}`}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to placeholder icon if image fails to load
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    const fallback = target.nextElementSibling as HTMLElement
+                    if (fallback) fallback.style.display = 'flex'
+                  }}
+                />
+              ) : null}
+              
+              {/* Fallback placeholder - shown when no images or image fails to load */}
+              <div 
+                className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
+                  product.images && product.images.length > 0 ? 'hidden' : 'flex'
+                }`}
+              >
                 <span className="text-8xl">{getProductIcon(product.category?.name)}</span>
               </div>
               
@@ -215,18 +255,29 @@ export default function ProductPage() {
               )}
             </div>
 
-            {/* Thumbnail Images - Show placeholders if product has multiple images */}
+            {/* Thumbnail Images - Show actual thumbnails when images exist */}
             {product.images && product.images.length > 1 && (
-              <div className="flex gap-2">
-                {product.images.map((_, index) => (
+              <div className="flex gap-2 overflow-x-auto">
+                {product.images.map((imageUrl, index) => (
                   <button
                     key={index}
                     onClick={() => setSelectedImageIndex(index)}
-                    className={`w-16 h-16 bg-gray-100 rounded-lg flex items-center justify-center border-2 ${
+                    className={`flex-shrink-0 w-16 h-16 bg-gray-100 rounded-lg overflow-hidden border-2 ${
                       selectedImageIndex === index ? 'border-primary-500' : 'border-transparent'
                     }`}
                   >
-                    <span className="text-2xl">{getProductIcon(product.category?.name)}</span>
+                    <img
+                      src={`/api/public/images/${imageUrl.replace('/api/images/', '').replace('/api/admin/images/', '')}?size=thumbnail`}
+                      alt={`${product.name} thumbnail ${index + 1}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to icon if thumbnail fails to load
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const parent = target.parentElement as HTMLElement
+                        parent.innerHTML = `<span class="text-2xl flex items-center justify-center w-full h-full">${getProductIcon(product.category?.name)}</span>`
+                      }}
+                    />
                   </button>
                 ))}
               </div>

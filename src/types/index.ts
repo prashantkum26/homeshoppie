@@ -23,15 +23,17 @@ export interface Product {
   id: string
   name: string
   slug: string
-  description: string | null
+  description: string
   price: number
-  originalPrice: number | null
+  compareAt?: number | null
   stock: number
-  sku: string | null
   images: string[]
   categoryId: string
   category?: Category
-  featured: boolean
+  isActive: boolean
+  weight?: number | null
+  unit?: string | null
+  tags: string[]
   createdAt: Date
   updatedAt: Date
 }

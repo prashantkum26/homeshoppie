@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
 import { 
@@ -28,10 +28,21 @@ const navigation: NavigationItem[] = [
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false)
+  const [totalItems, setTotalItems] = useState<number>(0)
+  const [isClient, setIsClient] = useState<boolean>(false)
   const { data: session } = useSession()
   const { getTotalItems } = useCartStore()
   
-  const totalItems = getTotalItems()
+  useEffect(() => {
+    setIsClient(true)
+    setTotalItems(getTotalItems())
+  }, [getTotalItems])
+
+  useEffect(() => {
+    if (isClient) {
+      setTotalItems(getTotalItems())
+    }
+  }, [getTotalItems, isClient])
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
@@ -39,8 +50,8 @@ export default function Header() {
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
           <div className="flex-shrink-0">
-            <Link href="/" className="text-2xl font-bold text-primary-600">
-              HomeShoppie
+            <Link href="/" className="text-2xl font-display font-bold text-primary-600 tracking-tight">
+              Home<span className="text-accent text-primary-500">Shoppie</span>
             </Link>
           </div>
 
@@ -103,20 +114,20 @@ export default function Header() {
                           {session.user?.name || session.user?.email}
                         </div>
                         <Link
-                          href="/profile"
+                          href="/dashboard"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           onClick={() => setUserMenuOpen(false)}
                         >
-                          Profile
+                          Dashboard
                         </Link>
                         <Link
                           href="/orders"
                           className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                           onClick={() => setUserMenuOpen(false)}
                         >
-                          Orders
+                          My Orders
                         </Link>
-                        {(session.user as any)?.role === 'ADMIN' && (
+                        {session.user?.role === 'ADMIN' && (
                           <Link
                             href="/admin"
                             className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -221,19 +232,21 @@ export default function Header() {
                       {session.user?.name || session.user?.email}
                     </div>
                     <Link
-                      href="/profile"
+                      href="/dashboard"
                       className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block px-3 py-2 rounded-md text-base font-medium"
                       onClick={() => setMobileMenuOpen(false)}
                     >
-                      Profile
+                      Dashboard
                     </Link>
-                    <Link
-                      href="/orders"
-                      className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block px-3 py-2 rounded-md text-base font-medium"
-                      onClick={() => setMobileMenuOpen(false)}
-                    >
-                      Orders
-                    </Link>
+                    {session.user?.role === 'ADMIN' && (
+                      <Link
+                        href="/admin"
+                        className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block px-3 py-2 rounded-md text-base font-medium"
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        Admin Dashboard
+                      </Link>
+                    )}
                     <button
                       onClick={() => {
                         signOut()
