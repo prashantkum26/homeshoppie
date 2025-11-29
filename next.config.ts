@@ -24,6 +24,19 @@ const nextConfig: NextConfig = {
         pathname: '/api/**',
       },
     ],
+    // Allow local API routes with query strings
+    localPatterns: [
+      {
+        pathname: '/api/public/images/**',
+      },
+      {
+        pathname: '/api/admin/images/**',
+      },
+    ],
+    // Allow SVG images for fallback placeholders
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   
   // Turbopack configuration (Next.js 16+)

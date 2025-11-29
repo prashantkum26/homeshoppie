@@ -7,7 +7,6 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import ImageUploader from '../../../../components/ImageUploader'
-import { imageService } from '../../../../lib/imageService'
 
 interface Category {
   id: string
@@ -26,6 +25,7 @@ interface ProductForm {
   tags: string[]
   categoryId: string
   isActive: boolean
+  images: string[]
 }
 
 export default function NewProductPage() {
@@ -47,7 +47,8 @@ export default function NewProductPage() {
     unit: 'kg',
     tags: [],
     categoryId: '',
-    isActive: true
+    isActive: true,
+    images: []
   })
 
   useEffect(() => {
@@ -72,7 +73,7 @@ export default function NewProductPage() {
       const response = await fetch('/api/categories')
       if (response.ok) {
         const categoriesData = await response.json()
-        setCategories(categoriesData)
+        setCategories(categoriesData?.data)
       } else {
         toast.error('Failed to load categories')
       }
@@ -223,7 +224,7 @@ export default function NewProductPage() {
           </div>
           <h1 className="text-3xl font-bold text-gray-900">Add New Product</h1>
           <p className="mt-2 text-gray-600">
-            Create a new product. Images can be added after the product is created.
+            Create a new product with images. You can upload images during creation or add them later.
           </p>
         </div>
 
@@ -278,7 +279,7 @@ export default function NewProductPage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                   >
                     <option value="">Select a category</option>
-                    {categories.map((category) => (
+                    {categories?.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
                       </option>

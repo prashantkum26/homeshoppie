@@ -161,8 +161,23 @@ class HomeshoppieImageService {
           throw new Error('Invalid response structure: no image data found')
         }
         
-        console.log('✅ Image uploaded successfully:', imageData.filename || imageData.originalName || 'unknown')
-        return imageData
+        // Normalize the response structure to match our interface
+        const normalizedData: ImageUploadResult = {
+          id: imageData.imageId || imageData.id,
+          filename: imageData.filename || imageData.originalName,
+          url: imageData.url || imageData.accessUrl,
+          publicUrl: imageData.publicUrl || imageData.publicUrls?.original || `/api/public/images/${imageData.imageId || imageData.id}`,
+          size: imageData.size,
+          mimeType: imageData.mimeType || imageData.mimetype,
+          alt: imageData.alt,
+          tags: imageData.tags,
+          category: imageData.category,
+          isPublic: imageData.isPublic,
+          createdAt: imageData.createdAt || imageData.uploadedAt || new Date().toISOString()
+        }
+        
+        console.log('✅ Image uploaded successfully:', normalizedData.filename)
+        return normalizedData
       } else {
         const errorMsg = result.error || result.message || 'Unknown upload error'
         console.error('❌ Upload failed:', errorMsg)
@@ -226,28 +241,63 @@ class HomeshoppieImageService {
     }
   }
 
-  // Step 4: Get single image
+  // Step 4: Get single image metadata
   async getImage(imageId: string): Promise<ImageUploadResult> {
     if (!await this.ensureAuthenticated()) {
       throw new Error('Authentication failed')
     }
 
     try {
-      const response = await fetch(`${this.baseUrl}/api/images/${imageId}`, {
+      // Try to get metadata from the info endpoint first
+      const response = await fetch(`${this.baseUrl}/api/images/${imageId}/info`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       })
+
+      // Check if we got JSON response
+      const contentType = response.headers.get('content-type')
+      if (!contentType || !contentType.includes('application/json')) {
+        // If not JSON, create a mock metadata response
+        return {
+          id: imageId,
+          filename: `image-${imageId}`,
+          url: `/api/images/${imageId}`,
+          publicUrl: `/api/public/images/${imageId}`,
+          size: 0,
+          mimeType: 'image/jpeg',
+          isPublic: true,
+          createdAt: new Date().toISOString(),
+          category: 'product'
+        }
+      }
 
       const result = await response.json()
       
       if (result.success) {
-        console.log('✅ Image retrieved:', result.data.image.filename)
-        return result.data.image
+        console.log('✅ Image metadata retrieved:', result.data.image?.filename || imageId)
+        return result.data.image || result.data
       } else {
         console.error('❌ Get image failed:', result.error)
         throw new Error(result.error)
       }
     } catch (error) {
       console.error('❌ Get image error:', error)
+      
+      // If metadata fetch fails, return a safe fallback
+      if (error instanceof SyntaxError && error.message.includes('JSON')) {
+        console.log('📝 Creating fallback metadata for image:', imageId)
+        return {
+          id: imageId,
+          filename: `image-${imageId}`,
+          url: `/api/images/${imageId}`,
+          publicUrl: `/api/public/images/${imageId}`,
+          size: 0,
+          mimeType: 'image/jpeg',
+          isPublic: true,
+          createdAt: new Date().toISOString(),
+          category: 'product'
+        }
+      }
+      
       throw error
     }
   }
@@ -309,9 +359,14 @@ class HomeshoppieImageService {
       throw new Error('Authentication failed')
     }
 
+    console.log("Get Image....::",{
+      imageId,
+      size
+    })
+
     try {
       const params = size ? `?size=${size}` : ''
-      const response = await fetch(`${this.baseUrl}/api/images/${imageId}/stream${params}`, {
+      const response = await fetch(`${this.baseUrl}/api/images/${imageId}${params}`, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       })
 

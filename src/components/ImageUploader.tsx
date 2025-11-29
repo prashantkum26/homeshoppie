@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import Image from 'next/image'
 import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -34,18 +34,29 @@ export default function ImageUploader({
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Initialize with existing images
-  useState(() => {
+  useEffect(() => {
     if (existingImages.length > 0) {
-      const mappedImages = existingImages.map((url, index) => ({
-        id: `existing-${index}`,
-        url,
-        accessToken: '',
-        thumbnailUrl: url,
-        originalName: `Image ${index + 1}`
-      }))
+      const mappedImages = existingImages.map((url, index) => {
+        // Extract image ID from URL for proper thumbnail generation
+        const imageId = url.includes('/api/public/images/') 
+          ? url.replace('/api/public/images/', '').split('?')[0]
+          : `existing-${index}`
+        
+        return {
+          id: imageId,
+          url,
+          accessToken: '',
+          thumbnailUrl: url.includes('/api/public/images/') 
+            ? `${url}?size=thumbnail`
+            : url,
+          originalName: `Image ${index + 1}`
+        }
+      })
       setImages(mappedImages)
+    } else {
+      setImages([]) // Clear images if no existing images
     }
-  })
+  }, [existingImages])
 
   const handleFiles = useCallback(async (files: FileList | File[]) => {
     const fileArray = Array.from(files)
@@ -103,9 +114,9 @@ export default function ImageUploader({
 
           return {
             id: result.data.imageId,
-            url: `/api/admin/images/${result.data.imageId}`,
+            url: `/api/public/images/${result.data.imageId}`,
             accessToken: result.data.accessToken || '',
-            thumbnailUrl: `/api/admin/images/${result.data.imageId}?size=thumbnail`,
+            thumbnailUrl: `/api/public/images/${result.data.imageId}?size=thumbnail`,
             originalName: result.data.originalName
           }
         } catch (error) {
@@ -167,13 +178,25 @@ export default function ImageUploader({
     try {
       // If it's an image from the image service (has a UUID format), delete it
       if (imageId.includes('-') && imageId.length > 10) {
-        const response = await fetch(`/api/admin/images/${imageId}`, {
+        // Include productId as query parameter for proper cleanup
+        const deleteUrl = productId 
+          ? `/api/admin/images/${imageId}?productId=${productId}`
+          : `/api/admin/images/${imageId}`
+        
+        const response = await fetch(deleteUrl, {
           method: 'DELETE'
         })
 
         if (!response.ok) {
           const errorData = await response.json()
           throw new Error(errorData.error || 'Failed to delete image')
+        }
+
+        const result = await response.json()
+        
+        // Log the database update status
+        if (result.databaseUpdated) {
+          console.log('✅ Product database updated successfully')
         }
       }
       
@@ -190,7 +213,7 @@ export default function ImageUploader({
       console.error('Failed to remove image:', error)
       toast.error('Failed to remove image')
     }
-  }, [images, onImagesChange])
+  }, [images, onImagesChange, productId])
 
   const openFileDialog = useCallback(() => {
     fileInputRef.current?.click()

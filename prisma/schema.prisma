@@ -90,7 +90,7 @@ model Product {
   description String
   price       Float
   compareAt   Float?
-  images      String[]
+  images      String[] // Array of image IDs referencing Image model
   category    Category @relation(fields: [categoryId], references: [id])
   categoryId  String   @db.ObjectId
   stock       Int      @default(0)
@@ -103,10 +103,52 @@ model Product {
   updatedAt   DateTime @updatedAt
 
   // Relations
-  cartItems  CartItem[]
-  orderItems OrderItem[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  productImages Image[]    @relation("ProductImages")
 
   @@map("products")
+}
+
+model Image {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  serviceImageId   String   @unique // The ID from the image service
+  filename         String
+  originalName     String
+  mimeType         String
+  size             Int
+  width            Int?
+  height           Int?
+  alt              String?
+  title            String?
+  category         String?
+  tags             String[]
+  isPublic         Boolean  @default(true)
+  
+  // Service URLs
+  serviceUrl       String   // Direct service URL
+  publicUrl        String   // Public access URL through our API
+  thumbnailUrl     String?
+  smallUrl         String?
+  mediumUrl        String?
+  largeUrl         String?
+  
+  // Metadata from service
+  variants         Json?    // Store variant information
+  accessToken      String?  // Service access token if needed
+  
+  // Relations
+  productId        String?  @db.ObjectId
+  product          Product? @relation("ProductImages", fields: [productId], references: [id])
+  
+  // Upload tracking
+  uploadedBy       String   @db.ObjectId
+  uploadedByEmail  String
+  
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("images")
 }
 
 model Address {

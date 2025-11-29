@@ -216,7 +216,7 @@ export default function ProductPage() {
               {product.images && product.images.length > 0 ? (
                 // Display actual product image
                 <img
-                  src={`/api/public/images/${product.images[selectedImageIndex]?.replace('/api/images/', '').replace('/api/admin/images/', '')}`}
+                  src={product.images[selectedImageIndex]}
                   alt={product.name}
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -267,7 +267,7 @@ export default function ProductPage() {
                     }`}
                   >
                     <img
-                      src={`/api/public/images/${imageUrl.replace('/api/images/', '').replace('/api/admin/images/', '')}?size=thumbnail`}
+                      src={`${imageUrl}?size=thumbnail`}
                       alt={`${product.name} thumbnail ${index + 1}`}
                       className="w-full h-full object-cover"
                       onError={(e) => {

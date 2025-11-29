@@ -266,7 +266,28 @@ export default function ProductsPage() {
               <div key={product.id} className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden border border-gray-200">
                 <Link href={`/products/${product.slug || product.id}`}>
                   <div className="aspect-square bg-gray-100 relative overflow-hidden">
-                    <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                    {product.images && product.images.length > 0 ? (
+                      // Display actual product image
+                      <img
+                        src={product.images[0]}
+                        alt={product.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          // Fallback to placeholder icon if image fails to load
+                          const target = e.target as HTMLImageElement
+                          target.style.display = 'none'
+                          const fallback = target.nextElementSibling as HTMLElement
+                          if (fallback) fallback.style.display = 'flex'
+                        }}
+                      />
+                    ) : null}
+                    
+                    {/* Fallback placeholder - shown when no images or image fails to load */}
+                    <div 
+                      className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
+                        product.images && product.images.length > 0 ? 'hidden' : 'flex'
+                      }`}
+                    >
                       <span className="text-6xl">{getProductIcon(product.category?.name)}</span>
                     </div>
                     

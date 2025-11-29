@@ -142,7 +142,12 @@ export default function ProductImageManager({
   // Delete an image
   const handleImageDelete = async (imageId: string) => {
     try {
-      const response = await fetch(`/api/admin/images/${imageId}`, {
+      // Include productId as query parameter for proper cleanup
+      const deleteUrl = productId 
+        ? `/api/admin/images/${imageId}?productId=${productId}`
+        : `/api/admin/images/${imageId}`
+      
+      const response = await fetch(deleteUrl, {
         method: 'DELETE'
       })
 
@@ -151,11 +156,19 @@ export default function ProductImageManager({
         throw new Error(errorData.error || 'Delete failed')
       }
 
+      const result = await response.json()
+      
+      // Update local state
       const updatedImages = images.filter(img => img.id !== imageId)
       setImages(updatedImages)
       onImagesChange?.(updatedImages)
       
-      toast.success('Image deleted successfully')
+      toast.success(result.message || 'Image deleted successfully')
+      
+      // Log the database update status
+      if (result.databaseUpdated) {
+        console.log('✅ Product database updated successfully')
+      }
     } catch (error) {
       console.error('Delete failed:', error)
       toast.error('Failed to delete image')

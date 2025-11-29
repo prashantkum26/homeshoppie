@@ -96,6 +96,25 @@ export async function DELETE(
 
     const { id: imageId } = await params
     
+    // Get productId from image record before deletion
+    const { prisma } = await import('../../../../../lib/prisma')
+    const imageRecord = await prisma.image.findUnique({
+      where: { id: imageId },
+      select: { 
+        id: true,
+        serviceImageId: true,
+        productId: true,
+        filename: true
+      }
+    })
+
+    if (!imageRecord) {
+      return NextResponse.json(
+        { error: 'Image not found' },
+        { status: 404 }
+      )
+    }
+
     // Auto-authenticate with image service
     const imageServiceAuth = await authenticateWithImageService(session.user)
     if (!imageServiceAuth.success) {
@@ -105,9 +124,9 @@ export async function DELETE(
       )
     }
 
-    // Forward delete request to image service
+    // Delete from external image service using serviceImageId
     const imageServiceUrl = process.env.IMAGE_SERVICE_URL || 'http://localhost:3001/api'
-    const response = await fetch(`${imageServiceUrl}/images/${imageId}`, {
+    const response = await fetch(`${imageServiceUrl}/images/${imageRecord.serviceImageId}`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${imageServiceAuth.token}`,
@@ -118,14 +137,41 @@ export async function DELETE(
       const errorText = await response.text()
       console.error('Image service delete error:', errorText)
       return NextResponse.json(
-        { error: 'Failed to delete image' },
+        { error: 'Failed to delete image from service' },
         { status: response.status }
       )
     }
 
+    // If image is linked to a product, remove it from product's images array
+    if (imageRecord.productId) {
+      const currentProduct = await prisma.product.findUnique({
+        where: { id: imageRecord.productId },
+        select: { images: true }
+      })
+      
+      if (currentProduct) {
+        const updatedImages = currentProduct.images.filter((imgId: string) => imgId !== imageId)
+        await prisma.product.update({
+          where: { id: imageRecord.productId },
+          data: {
+            images: {
+              set: updatedImages
+            }
+          }
+        })
+      }
+    }
+
+    // Delete image record from database
+    await prisma.image.delete({
+      where: { id: imageId }
+    })
+
     const result = await response.json()
     return NextResponse.json({
       ...result,
+      productId: imageRecord.productId,
+      message: `Image ${imageRecord.filename} deleted successfully${imageRecord.productId ? ' and removed from product' : ''}`,
       deprecated: 'Use /api/admin/images/[id] for future operations'
     })
 
