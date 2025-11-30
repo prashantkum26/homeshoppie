@@ -8,7 +8,8 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await auth()
+    const session = await auth();
+    const { id: orderId } = await params;
 
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -17,7 +18,6 @@ export async function PATCH(
       )
     }
 
-    const orderId = params.id
     const body = await request.json()
     const { paymentStatus, status, paymentDetails } = body
 

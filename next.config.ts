@@ -32,6 +32,10 @@ const nextConfig: NextConfig = {
       {
         pathname: '/api/admin/images/**',
       },
+      {
+        pathname: '/images/**',
+        search: '',
+      },
     ],
     // Allow SVG images for fallback placeholders
     dangerouslyAllowSVG: true,
