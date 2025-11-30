@@ -31,6 +31,17 @@ const getCategoryIcon = (categoryName: string) => {
   }
 }
 
+const getCategoryImagePath = (categoryName: string) => {
+  switch (categoryName) {
+    case 'Ghee': return '/images/category/ghee.svg'
+    case 'Oils': return '/images/category/oils.svg'
+    case 'Sweets': return '/images/category/sweets.svg'
+    case 'Namkeen': return '/images/category/namkeen.svg'
+    case 'Pooja Items': return '/images/category/pooja-items.svg'
+    default: return null
+  }
+}
+
 const getCategoryColor = (categoryName: string) => {
   switch (categoryName) {
     case 'Ghee': return 'from-yellow-100 to-yellow-200'
@@ -136,8 +147,29 @@ export default function CategoriesPage() {
                 >
                   <div className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 transform group-hover:scale-105 overflow-hidden border border-gray-200">
                     <div className={`bg-gradient-to-br ${getCategoryColor(category.name)} p-8 text-center`}>
-                      <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow">
-                        <span className="text-4xl">{getCategoryIcon(category.name)}</span>
+                      <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow overflow-hidden">
+                        {getCategoryImagePath(category.name) ? (
+                          <img
+                            src={getCategoryImagePath(category.name)!}
+                            alt={category.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Fallback to emoji icon if image fails to load
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              const fallback = target.nextElementSibling as HTMLElement
+                              if (fallback) fallback.style.display = 'flex'
+                            }}
+                          />
+                        ) : null}
+                        {/* Fallback emoji - shown when no image or image fails to load */}
+                        <div 
+                          className={`w-full h-full flex items-center justify-center ${
+                            getCategoryImagePath(category.name) ? 'hidden' : 'flex'
+                          }`}
+                        >
+                          <span className="text-4xl">{getCategoryIcon(category.name)}</span>
+                        </div>
                       </div>
                       <h3 className="text-2xl font-bold text-gray-900 mb-2 group-hover:text-primary-600 transition-colors">
                         {category.name}

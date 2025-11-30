@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { calculateOrderTax } from '@/lib/taxEngine'
 
 // GET user orders
 export async function GET(request: NextRequest) {
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { items, shippingAddress, billingAddress, paymentMethod, notes, totalAmount } = body
+    const { items, shippingAddress, billingAddress, paymentMethod, notes, shippingFee = 0 } = body
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -71,17 +72,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!shippingAddress || !totalAmount) {
+    if (!shippingAddress) {
       return NextResponse.json(
-        { error: 'Shipping address and total amount are required' },
+        { error: 'Shipping address is required' },
         { status: 400 }
       )
     }
 
-    // Verify product availability and stock
+    // Validate shipping address has required fields for tax calculation
+    if (!shippingAddress.state) {
+      return NextResponse.json(
+        { error: 'Shipping state is required for tax calculation' },
+        { status: 400 }
+      )
+    }
+
+    // Verify product availability and stock, and get product details for tax calculation
+    const validatedItems: Array<{
+      id: string
+      name: string
+      price: number
+      quantity: number
+      category: string
+    }> = []
+    let subtotal = 0
+
     for (const item of items) {
       const product = await prisma.product.findUnique({
-        where: { id: item.productId }
+        where: { id: item.productId },
+        include: {
+          category: true
+        }
       })
 
       if (!product) {
@@ -104,7 +125,33 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+
+      const itemTotal = product.price * item.quantity
+      subtotal += itemTotal
+
+      validatedItems.push({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        quantity: item.quantity,
+        category: product.category.name
+      })
     }
+
+    // Calculate taxes
+    const taxCalculation = await calculateOrderTax({
+      items: validatedItems,
+      subtotal,
+      shippingFee,
+      shippingAddress: {
+        state: shippingAddress.state,
+        city: shippingAddress.city || '',
+        pincode: shippingAddress.pincode || ''
+      },
+      userId: session.user.id
+    })
+
+    const totalAmount = taxCalculation.finalTotal
 
     // Create the order with address and items
     const order = await prisma.$transaction(async (tx) => {
@@ -130,7 +177,7 @@ export async function POST(request: NextRequest) {
       // Generate unique order number
       const orderNumber = `ORD${Date.now()}${Math.random().toString(36).substr(2, 4).toUpperCase()}`
 
-      // Create order
+      // Create order with tax information
       const newOrder = await tx.order.create({
         data: {
           orderNumber: orderNumber,
@@ -140,10 +187,14 @@ export async function POST(request: NextRequest) {
           paymentMethod: paymentMethod || 'card',
           paymentStatus: paymentMethod === 'cod' ? 'PENDING' : 'PENDING',
           totalAmount: totalAmount,
+          subtotalAmount: subtotal,
+          taxAmount: taxCalculation.totalTaxAmount,
+          taxBreakdown: taxCalculation.taxBreakdown,
+          shippingFee: shippingFee,
           notes: notes || null,
           orderItems: {
-            create: items.map((item: any) => ({
-              productId: item.productId,
+            create: validatedItems.map((item) => ({
+              productId: item.id,
               name: item.name,
               quantity: item.quantity,
               price: item.price
@@ -157,9 +208,9 @@ export async function POST(request: NextRequest) {
       })
 
       // Update product stock
-      for (const item of items) {
+      for (const item of validatedItems) {
         await tx.product.update({
-          where: { id: item.productId },
+          where: { id: item.id },
           data: {
             stock: {
               decrement: item.quantity

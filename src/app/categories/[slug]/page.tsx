@@ -56,6 +56,17 @@ const getProductIcon = (categoryName?: string) => {
   }
 }
 
+const getCategoryImagePath = (categoryName?: string) => {
+  switch (categoryName) {
+    case 'Ghee': return '/images/category/ghee.svg'
+    case 'Oils': return '/images/category/oils.svg'
+    case 'Sweets': return '/images/category/sweets.svg'
+    case 'Namkeen': return '/images/category/namkeen.svg'
+    case 'Pooja Items': return '/images/category/pooja-items.svg'
+    default: return null
+  }
+}
+
 const getCategoryColor = (categoryName?: string) => {
   switch (categoryName) {
     case 'Ghee': return 'from-yellow-100 to-yellow-200'
@@ -113,7 +124,24 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
         <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-4 border border-gray-200">
           <div className="flex gap-4">
             <div className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-lg overflow-hidden relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+              {getCategoryImagePath(product.category?.name) ? (
+                <img
+                  src={getCategoryImagePath(product.category?.name)!}
+                  alt={product.category?.name || 'Product'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    const fallback = target.nextElementSibling as HTMLElement
+                    if (fallback) fallback.style.display = 'flex'
+                  }}
+                />
+              ) : null}
+              <div 
+                className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
+                  getCategoryImagePath(product.category?.name) ? 'hidden' : 'flex'
+                }`}
+              >
                 <span className="text-2xl">{getProductIcon(product.category?.name)}</span>
               </div>
               {product.discountPercent > 0 && (
@@ -126,7 +154,7 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
             <div className="flex-1 min-w-0">
               <div className="flex justify-between items-start">
                 <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
+                  <h3 className="text-sm font-medium text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
                     {product.name}
                   </h3>
                   <p className="text-sm text-gray-500 mb-2 line-clamp-2">{product.description}</p>
@@ -198,7 +226,24 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
     <Link href={`/products/${product.slug || product.id}`} className="group block">
       <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 transform group-hover:scale-105 overflow-hidden">
         <div className="relative aspect-square bg-gray-100 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+          {getCategoryImagePath(product.category?.name) ? (
+            <img
+              src={getCategoryImagePath(product.category?.name)!}
+              alt={product.category?.name || 'Product'}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+                const fallback = target.nextElementSibling as HTMLElement
+                if (fallback) fallback.style.display = 'flex'
+              }}
+            />
+          ) : null}
+          <div 
+            className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
+              getCategoryImagePath(product.category?.name) ? 'hidden' : 'flex'
+            }`}
+          >
             <span className="text-5xl">{getProductIcon(product.category?.name)}</span>
           </div>
           
@@ -251,7 +296,7 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
             </span>
           </div>
 
-          <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
+          <h3 className="text-sm font-medium text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
             {product.name}
           </h3>
           
@@ -399,8 +444,29 @@ export default function CategoryPage() {
           
           <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
             <div className="flex-shrink-0">
-              <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-                <span className="text-4xl">{getProductIcon(category.name)}</span>
+              <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden">
+                {getCategoryImagePath(category.name) ? (
+                  <img
+                    src={getCategoryImagePath(category.name)!}
+                    alt={category.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      // Fallback to emoji icon if image fails to load
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      const fallback = target.nextElementSibling as HTMLElement
+                      if (fallback) fallback.style.display = 'flex'
+                    }}
+                  />
+                ) : null}
+                {/* Fallback emoji - shown when no image or image fails to load */}
+                <div 
+                  className={`w-full h-full flex items-center justify-center ${
+                    getCategoryImagePath(category.name) ? 'hidden' : 'flex'
+                  }`}
+                >
+                  <span className="text-4xl">{getProductIcon(category.name)}</span>
+                </div>
               </div>
             </div>
             

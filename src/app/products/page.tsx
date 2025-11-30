@@ -312,7 +312,7 @@ export default function ProductsPage() {
                 <div className="p-4">
                   <div className="mb-2">
                     <Link href={`/products/${product.slug || product.id}`}>
-                      <h3 className="font-semibold text-gray-900 hover:text-primary-600 transition-colors line-clamp-2 mb-1">
+                      <h3 className="text-sm font-medium text-gray-900 hover:text-primary-600 transition-colors line-clamp-2 mb-1">
                         {product.name}
                       </h3>
                     </Link>

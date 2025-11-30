@@ -1,0 +1,41 @@
+<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bottleGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#90EE90;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#228B22;stop-opacity:0.8" />
+    </linearGradient>
+    <linearGradient id="oilGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="400" fill="#F0FFF0"/>
+  
+  <!-- Bottle 1 (Left) -->
+  <rect x="80" y="120" width="60" height="200" rx="10" fill="url(#bottleGradient)" stroke="#006400" stroke-width="2"/>
+  <rect x="90" y="140" width="40" height="160" fill="url(#oilGradient)"/>
+  <rect x="85" y="100" width="50" height="30" rx="5" fill="#8FBC8F"/>
+  <text x="110" y="340" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#006400">Mustard</text>
+  
+  <!-- Bottle 2 (Center) -->
+  <rect x="170" y="100" width="60" height="220" rx="10" fill="url(#bottleGradient)" stroke="#006400" stroke-width="2"/>
+  <rect x="180" y="120" width="40" height="180" fill="#FFFACD"/>
+  <rect x="175" y="80" width="50" height="30" rx="5" fill="#8FBC8F"/>
+  <text x="200" y="340" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#006400">Coconut</text>
+  
+  <!-- Bottle 3 (Right) -->
+  <rect x="260" y="130" width="60" height="190" rx="10" fill="url(#bottleGradient)" stroke="#006400" stroke-width="2"/>
+  <rect x="270" y="150" width="40" height="150" fill="#DEB887"/>
+  <rect x="265" y="110" width="50" height="30" rx="5" fill="#8FBC8F"/>
+  <text x="290" y="340" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#006400">Sesame</text>
+  
+  <!-- Labels on bottles -->
+  <rect x="85" y="180" width="30" height="20" fill="white" opacity="0.8"/>
+  <rect x="175" y="200" width="30" height="20" fill="white" opacity="0.8"/>
+  <rect x="265" y="190" width="30" height="20" fill="white" opacity="0.8"/>
+  
+  <!-- Title -->
+  <text x="200" y="50" text-anchor="middle" font-family="serif" font-size="28" font-weight="bold" fill="#228B22">Premium Oils</text>
+</svg>

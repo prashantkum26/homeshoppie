@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phone, street, city, state, pincode, landmark, type } = body
+    const { name, phone, street, city, state, pincode, landmark, type, isDefault = false } = body
 
     // Validate required fields
     if (!name || !phone || !street || !city || !state || !pincode) {
@@ -51,21 +51,69 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const address = await prisma.address.create({
-      data: {
-        userId: session.user.id,
-        name,
-        phone,
-        street,
-        city,
-        state,
-        pincode,
-        landmark: landmark || null,
-        type: type || 'HOME'
-      }
+    // Check address limit (max 5 addresses per user)
+    const existingAddressCount = await prisma.address.count({
+      where: { userId: session.user.id }
     })
 
-    return NextResponse.json(address, { status: 201 })
+    if (existingAddressCount >= 5) {
+      return NextResponse.json(
+        { 
+          error: 'Address limit reached. You can have a maximum of 5 addresses.',
+          currentCount: existingAddressCount,
+          maxAllowed: 5
+        },
+        { status: 400 }
+      )
+    }
+
+    // Validate input data
+    if (phone.length < 10) {
+      return NextResponse.json(
+        { error: 'Phone number must be at least 10 digits' },
+        { status: 400 }
+      )
+    }
+
+    if (pincode.length < 6) {
+      return NextResponse.json(
+        { error: 'Pincode must be at least 6 characters' },
+        { status: 400 }
+      )
+    }
+
+    // Create address and handle default address logic
+    const result = await prisma.$transaction(async (tx) => {
+      // If this is set as default or user has no addresses, make it default
+      const shouldSetAsDefault = isDefault || existingAddressCount === 0
+
+      // Create the address
+      const address = await tx.address.create({
+        data: {
+          userId: session.user.id,
+          name,
+          phone,
+          street,
+          city,
+          state,
+          pincode,
+          landmark: landmark || null,
+          type: type || 'HOME'
+        }
+      })
+
+      // Update user's default address if needed
+      if (shouldSetAsDefault) {
+        await tx.user.update({
+          where: { id: session.user.id },
+          data: { defaultAddressId: address.id }
+        })
+      }
+
+      return { address, isDefault: shouldSetAsDefault }
+    })
+
+    return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error('Error creating address:', error)
     return NextResponse.json(

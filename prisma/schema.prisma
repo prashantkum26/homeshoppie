@@ -11,24 +11,101 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  email     String   @unique
-  name      String?
-  phone     String?
-  password  String?
-  image     String?
-  role      Role     @default(USER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  email             String   @unique
+  name              String?
+  phone             String?
+  password          String?
+  image             String?
+  role              Role     @default(USER)
+  defaultAddressId  String?  @db.ObjectId
+  isLocked          Boolean  @default(false)
+  lockUntil         DateTime?
+  failedLoginCount  Int      @default(0)
+  lastLoginAt       DateTime?
+  passwordChangedAt DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // Relations
-  accounts Account[]
-  sessions Session[]
-  addresses Address[]
-  orders    Order[]
-  cartItems CartItem[]
+  accounts      Account[]
+  sessions      Session[]
+  addresses     Address[]
+  orders        Order[]
+  cartItems     CartItem[]
+  securityLogs  SecurityLog[]
+  rateLimits    RateLimit[]
 
   @@map("users")
+}
+
+model SecurityLog {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String?           @db.ObjectId
+  action      SecurityAction
+  ipAddress   String
+  userAgent   String?
+  details     Json?
+  severity    SecuritySeverity  @default(LOW)
+  blocked     Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@map("security_logs")
+}
+
+model RateLimit {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String?  @db.ObjectId
+  ipAddress  String
+  endpoint   String
+  requests   Int      @default(1)
+  windowStart DateTime @default(now())
+  blocked    Boolean  @default(false)
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@unique([ipAddress, endpoint])
+  @@map("rate_limits")
+}
+
+model TaxConfiguration {
+  id            String      @id @default(auto()) @map("_id") @db.ObjectId
+  name          String      @unique
+  type          TaxType
+  rate          Float       // Percentage rate
+  isActive      Boolean     @default(true)
+  applicableIn  String[]    // States/regions where applicable
+  productTypes  String[]    // Product categories this applies to
+  minAmount     Float?      // Minimum order amount for tax
+  maxAmount     Float?      // Maximum taxable amount
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@map("tax_configurations")
+}
+
+model PaymentLog {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  orderId           String        @db.ObjectId
+  razorpayOrderId   String?       @unique
+  razorpayPaymentId String?       @unique
+  signature         String?
+  amount            Float
+  currency          String        @default("INR")
+  status            PaymentStatus @default(PENDING)
+  method            String?       // card, netbanking, upi, etc
+  gateway           String        @default("razorpay")
+  gatewayResponse   Json?         // Full gateway response
+  failureReason     String?
+  retryCount        Int           @default(0)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@map("payment_logs")
 }
 
 model Account {
@@ -194,14 +271,18 @@ model Order {
   paymentStatus   PaymentStatus @default(PENDING)
   paymentIntentId String?
   totalAmount     Float
+  subtotalAmount  Float?      // Amount before tax and shipping
+  taxAmount       Float       @default(0)
+  taxBreakdown    Json?       // Detailed tax breakdown
   shippingFee     Float       @default(0)
   notes           String?
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
 
-  user      User        @relation(fields: [userId], references: [id])
-  address   Address     @relation(fields: [addressId], references: [id])
-  orderItems OrderItem[]
+  user        User         @relation(fields: [userId], references: [id])
+  address     Address      @relation(fields: [addressId], references: [id])
+  orderItems  OrderItem[]
+  paymentLogs PaymentLog[]
 
   @@map("orders")
 }
@@ -239,4 +320,31 @@ enum PaymentStatus {
   PAID
   FAILED
   REFUNDED
+}
+
+enum SecurityAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  PASSWORD_CHANGE
+  ACCOUNT_LOCKED
+  SUSPICIOUS_ACTIVITY
+  API_ACCESS
+  UNAUTHORIZED_ACCESS
+  DATA_BREACH_ATTEMPT
+}
+
+enum SecuritySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TaxType {
+  PERCENTAGE
+  FIXED_AMOUNT
+  GST
+  STATE_TAX
+  CITY_TAX
 }

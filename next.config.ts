@@ -24,13 +24,19 @@ const nextConfig: NextConfig = {
         pathname: '/api/**',
       },
     ],
-    // Allow local API routes with query strings
+    // Allow local API routes and static images
     localPatterns: [
       {
         pathname: '/api/public/images/**',
       },
       {
         pathname: '/api/admin/images/**',
+      },
+      {
+        pathname: '/images/**',
+      },
+      {
+        pathname: '/uploads/**',
       },
     ],
     // Allow SVG images for fallback placeholders

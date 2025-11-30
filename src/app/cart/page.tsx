@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
+import ProductImage from '@/components/ProductImage'
 
 export default function CartPage() {
   const { data: session } = useSession()
@@ -104,21 +105,13 @@ export default function CartPage() {
             {items.map((item) => (
               <div key={item.id} className="p-6 flex items-center space-x-6">
                 <div className="flex-shrink-0 w-24 h-24 bg-gray-200 rounded-lg overflow-hidden">
-                  {item.images && item.images.length > 0 ? (
-                    <Image
-                      src={item.images[0]}
-                      alt={item.name}
-                      width={96}
-                      height={96}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-gray-400">
-                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  )}
+                  <ProductImage 
+                    src={item.images && item.images.length > 0 ? item.images[0] : null}
+                    alt={item.name}
+                    width={96}
+                    height={96}
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
                 <div className="flex-1 min-w-0">
