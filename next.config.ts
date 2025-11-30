@@ -34,9 +34,7 @@ const nextConfig: NextConfig = {
       },
       {
         pathname: '/images/**',
-      },
-      {
-        pathname: '/uploads/**',
+        search: '',
       },
     ],
     // Allow SVG images for fallback placeholders

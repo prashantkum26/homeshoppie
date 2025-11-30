@@ -314,7 +314,7 @@ export default function ProductsPage() {
                     <Link href={`/products/${product.slug || product.id}`}>
                       <h3 className="text-sm font-medium text-gray-900 hover:text-primary-600 transition-colors line-clamp-2 mb-1">
                         {product.name}
-                      </h3>
+                      </h5>
                     </Link>
                     <p className="text-sm text-gray-600 line-clamp-2">
                       {product.description}
