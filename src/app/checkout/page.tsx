@@ -7,6 +7,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
+import { loadScript } from '@/utils/loadScript'
 
 interface Address {
   id?: string
@@ -81,7 +82,7 @@ export default function CheckoutPage() {
       if (response.ok) {
         const addresses = await response.json()
         setSavedAddresses(addresses)
-        
+
         // If user has saved addresses, use the first one as default
         if (addresses.length > 0) {
           setFormData(prev => ({
@@ -131,18 +132,18 @@ export default function CheckoutPage() {
 
   const validateForm = () => {
     const { shippingAddress, billingAddress, sameAsShipping } = formData
-    
+
     // Validate shipping address
-    if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.street || 
-        !shippingAddress.city || !shippingAddress.state || !shippingAddress.pincode) {
+    if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.street ||
+      !shippingAddress.city || !shippingAddress.state || !shippingAddress.pincode) {
       toast.error('Please fill in all required shipping address fields')
       return false
     }
 
     // Validate billing address if different from shipping
     if (!sameAsShipping) {
-      if (!billingAddress.name || !billingAddress.phone || !billingAddress.street || 
-          !billingAddress.city || !billingAddress.state || !billingAddress.pincode) {
+      if (!billingAddress.name || !billingAddress.phone || !billingAddress.street ||
+        !billingAddress.city || !billingAddress.state || !billingAddress.pincode) {
         toast.error('Please fill in all required billing address fields')
         return false
       }
@@ -153,7 +154,7 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!validateForm()) return
 
     setIsLoading(true)
@@ -178,6 +179,21 @@ export default function CheckoutPage() {
       }
 
       // Create order
+      // const orderData = {
+      //   items: items.map(item => ({
+      //     productId: item.id,
+      //     quantity: item.quantity,
+      //     price: item.price,
+      //     name: item.name
+      //   })),
+      //   shippingAddress: formData.shippingAddress,
+      //   billingAddress: formData.sameAsShipping ? formData.shippingAddress : formData.billingAddress,
+      //   paymentMethod: formData.paymentMethod,
+      //   notes: formData.notes,
+      //   totalAmount: subtotal + shippingFee
+      // }
+
+      // --- 1️⃣ Create internal order ---
       const orderData = {
         items: items.map(item => ({
           productId: item.id,
@@ -186,11 +202,13 @@ export default function CheckoutPage() {
           name: item.name
         })),
         shippingAddress: formData.shippingAddress,
-        billingAddress: formData.sameAsShipping ? formData.shippingAddress : formData.billingAddress,
+        billingAddress: formData.sameAsShipping
+          ? formData.shippingAddress
+          : formData.billingAddress,
         paymentMethod: formData.paymentMethod,
         notes: formData.notes,
         totalAmount: subtotal + shippingFee
-      }
+      };
 
       const response = await fetch('/api/orders', {
         method: 'POST',
@@ -205,10 +223,69 @@ export default function CheckoutPage() {
         throw new Error(error.error || 'Failed to create order')
       }
 
-      const order = await response.json()
-      
+      // const order = await response.json();
+      const internalOrder = await response.json();
+
+      const ok = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
+      if (!ok) {
+        toast.error("Failed to load Razorpay");
+        return;
+      }
+
+      // --- 3️⃣ Create Razorpay order ---
+      const rzpOrderRes = await fetch("/api/razorpay/order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: subtotal + shippingFee,
+          receipt: internalOrder.id,
+        })
+      });
+
+      const rzpOrder = await rzpOrderRes.json();
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
+        amount: rzpOrder.amount,
+        currency: "INR",
+        name: "HomeShoppie",
+        description: "Order Payment",
+        order_id: rzpOrder.id,
+        handler: async function (response: any) {
+          // --- 5️⃣ Verify payment ---
+          const verifyRes = await fetch("/api/razorpay/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(response),
+          });
+
+          const verified = await verifyRes.json();
+
+          if (verified.success) {
+            // update internal order as paid
+            await fetch(`/api/orders/${internalOrder.id}/pay`, {
+              method: "PATCH"
+            });
+
+            clearCart();
+            router.push(`/order-success?orderId=${internalOrder.id}`);
+          } else {
+            toast.error("Payment verification failed");
+          }
+        },
+        prefill: {
+          name: formData.shippingAddress.name,
+          email: session?.user?.email || "",
+          contact: formData.shippingAddress.phone
+        },
+        theme: { color: "#00A96E" }
+      };
+
+      const payment = new window.Razorpay(options);
+      payment.open();
+
       // Redirect to payment page
-      router.push(`/payment?orderId=${order.id}`)
+      // router.push(`/payment?orderId=${internalOrder.id}`)
 
     } catch (error: any) {
       toast.error(error.message || 'Failed to process checkout')
@@ -238,15 +315,15 @@ export default function CheckoutPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
-          
+
           <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Left Column - Forms */}
             <div className="lg:col-span-2 space-y-8">
-              
+
               {/* Shipping Address */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping Address</h2>
-                
+
                 {/* Saved Addresses */}
                 {savedAddresses.length > 0 && (
                   <div className="mb-6">
@@ -280,7 +357,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Phone Number *</label>
                     <input
@@ -291,7 +368,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div className="sm:col-span-2">
                     <label className="block text-sm font-medium text-gray-700">Street Address *</label>
                     <input
@@ -302,7 +379,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">City *</label>
                     <input
@@ -313,7 +390,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">State *</label>
                     <input
@@ -324,7 +401,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">PIN Code *</label>
                     <input
@@ -335,7 +412,7 @@ export default function CheckoutPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Landmark (Optional)</label>
                     <input
@@ -375,7 +452,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Phone Number *</label>
                       <input
@@ -386,7 +463,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div className="sm:col-span-2">
                       <label className="block text-sm font-medium text-gray-700">Street Address *</label>
                       <input
@@ -397,7 +474,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">City *</label>
                       <input
@@ -408,7 +485,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">State *</label>
                       <input
@@ -419,7 +496,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">PIN Code *</label>
                       <input
@@ -430,7 +507,7 @@ export default function CheckoutPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>
-                    
+
                     <div>
                       <label className="block text-sm font-medium text-gray-700">Landmark (Optional)</label>
                       <input
@@ -459,7 +536,7 @@ export default function CheckoutPage() {
                     />
                     <span className="ml-3">Credit/Debit Card</span>
                   </label>
-                  
+
                   <label className="flex items-center">
                     <input
                       type="radio"
@@ -471,7 +548,7 @@ export default function CheckoutPage() {
                     />
                     <span className="ml-3">UPI Payment</span>
                   </label>
-                  
+
                   <label className="flex items-center">
                     <input
                       type="radio"
@@ -503,7 +580,7 @@ export default function CheckoutPage() {
             <div className="lg:col-span-1">
               <div className="bg-white p-6 rounded-lg shadow-sm sticky top-4">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Summary</h2>
-                
+
                 {/* Items */}
                 <div className="space-y-3 mb-6">
                   {items.map((item) => (
@@ -525,39 +602,39 @@ export default function CheckoutPage() {
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <h3 className="text-sm font-medium text-gray-900 truncate">{item.name}</h3>
                         <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                       </div>
-                      
+
                       <div className="text-sm font-medium text-gray-900">
                         ₹{(item.price * item.quantity).toFixed(2)}
                       </div>
                     </div>
                   ))}
                 </div>
-                
+
                 {/* Totals */}
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal ({getTotalItems()} items)</span>
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  
+
                   <div className="flex justify-between text-sm">
                     <span>Shipping</span>
                     <span className={shippingFee === 0 ? 'text-green-600' : ''}>
                       {shippingFee === 0 ? 'FREE' : `₹${shippingFee.toFixed(2)}`}
                     </span>
                   </div>
-                  
+
                   <div className="flex justify-between text-lg font-semibold pt-2 border-t">
                     <span>Total</span>
                     <span>₹{total.toFixed(2)}</span>
                   </div>
                 </div>
-                
+
                 {/* Actions */}
                 <div className="mt-6 space-y-3">
                   <button
@@ -567,7 +644,7 @@ export default function CheckoutPage() {
                   >
                     {isLoading ? 'Processing...' : 'Continue to Payment'}
                   </button>
-                  
+
                   <Link
                     href="/cart"
                     className="w-full bg-white border border-gray-300 rounded-md shadow-sm py-3 px-4 text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 text-center block"
