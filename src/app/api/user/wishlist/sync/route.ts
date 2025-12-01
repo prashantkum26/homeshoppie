@@ -42,8 +42,7 @@ export async function POST(request: NextRequest) {
         data: itemsToAdd.map((item: WishlistItem) => ({
           userId: session.user.id,
           productId: item.id,
-        })),
-        skipDuplicates: true
+        }))
       })
     }
 
