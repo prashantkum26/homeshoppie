@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create address and handle default address logic
-    const result = await prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx: any) => {
       // If this is set as default or user has no addresses, make it default
       const shouldSetAsDefault = isDefault || existingAddressCount === 0
 
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
           city,
           state,
           pincode,
-          landmark: landmark || null,
+          landmark: landmark || "",
           type: type || 'HOME'
         }
       })
