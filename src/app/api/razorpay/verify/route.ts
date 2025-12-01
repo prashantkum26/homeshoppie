@@ -237,9 +237,15 @@ export async function POST(req: NextRequest) {
     try {
       await retryOperation(async () => {
         await prisma.$transaction(async (tx) => {
-          // Update payment log
-          await tx.paymentLog.update({
-            where: { id: paymentLog.id },
+          // Use updateMany with where clause to avoid unique constraint issues
+          const updateResult = await tx.paymentLog.updateMany({
+            where: {
+              id: paymentLog.id,
+              OR: [
+                { razorpayPaymentId: null },
+                { razorpayPaymentId: razorpay_payment_id } // Allow updating same payment ID
+              ]
+            },
             data: {
               status: 'PAID',
               razorpayPaymentId: razorpay_payment_id,
@@ -247,6 +253,12 @@ export async function POST(req: NextRequest) {
               updatedAt: new Date()
             }
           });
+
+          // If no rows were updated, payment ID might already be set by another process
+          if (updateResult.count === 0) {
+            console.warn('Payment log not updated - possibly already processed by another request:', razorpay_payment_id);
+            return;
+          }
 
           // Update order status (keep the same payment method as originally selected)
           await tx.order.update({

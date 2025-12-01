@@ -150,18 +150,53 @@ export async function POST(req: NextRequest) {
       });
     });
 
-    // Log the payment order creation in our database
-    await prisma.paymentLog.create({
-      data: {
-        orderId: internalOrder.id,
-        razorpayOrderId: razorpayOrder.id,
-        amount: amount,
-        currency: 'INR',
-        status: 'PENDING',
-        gateway: 'razorpay',
-        gatewayResponse: JSON.parse(JSON.stringify(razorpayOrder))
+    // Log the payment order creation in our database with duplicate handling
+    try {
+      await prisma.paymentLog.upsert({
+        where: {
+          razorpayOrderId: razorpayOrder.id
+        },
+        create: {
+          orderId: internalOrder.id,
+          razorpayOrderId: razorpayOrder.id,
+          amount: amount,
+          currency: 'INR',
+          status: 'PENDING',
+          gateway: 'razorpay',
+          gatewayResponse: JSON.parse(JSON.stringify(razorpayOrder))
+        },
+        update: {
+          // Update existing record if found (shouldn't happen but safe fallback)
+          orderId: internalOrder.id,
+          amount: amount,
+          currency: 'INR',
+          status: 'PENDING',
+          gateway: 'razorpay',
+          gatewayResponse: JSON.parse(JSON.stringify(razorpayOrder)),
+          updatedAt: new Date()
+        }
+      });
+    } catch (dbError: any) {
+      // Handle unique constraint violation specifically
+      if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayOrderId')) {
+        console.warn('Duplicate razorpayOrderId handled during order creation:', razorpayOrder.id);
+        
+        // Check if a payment log with this razorpayOrderId already exists
+        const existingLog = await prisma.paymentLog.findUnique({
+          where: { razorpayOrderId: razorpayOrder.id }
+        });
+        
+        if (existingLog) {
+          console.log('Using existing payment log for order:', razorpayOrder.id);
+        } else {
+          // If no existing log found, this is an unexpected error
+          console.error('Unexpected constraint violation without existing record');
+          throw dbError;
+        }
+      } else {
+        throw dbError; // Re-throw other database errors
       }
-    });
+    }
 
     // Log successful order creation
     await logSecurityEvent({

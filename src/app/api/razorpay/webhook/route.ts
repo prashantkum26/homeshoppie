@@ -191,22 +191,35 @@ async function handlePaymentSuccess(paymentEntity: any) {
     // Update payment log and order status with error handling
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.paymentLog.update({
-          where: { id: paymentLog.id },
+        // Use updateMany with where clause to avoid unique constraint issues
+        const updateResult = await tx.paymentLog.updateMany({
+          where: {
+            id: paymentLog.id,
+            OR: [
+              { razorpayPaymentId: null },
+              { razorpayPaymentId: paymentId } // Allow updating same payment ID
+            ]
+          },
           data: {
             status: 'PAID',
             razorpayPaymentId: paymentId,
-            method: method, // Store original Razorpay method
+            method: method,
             gatewayResponse: paymentEntity,
             updatedAt: new Date()
           }
         });
 
+        // If no rows were updated, payment ID might already be set by another process
+        if (updateResult.count === 0) {
+          console.warn('Payment log not updated - possibly already processed by another request:', paymentId);
+          return;
+        }
+
         await tx.order.update({
           where: { id: paymentLog.orderId },
           data: {
             paymentStatus: 'PAID',
-            paymentMethod: internalMethod, // Update with actual payment method used
+            paymentMethod: internalMethod,
             status: 'CONFIRMED',
             paymentIntentId: paymentId,
             updatedAt: new Date()
