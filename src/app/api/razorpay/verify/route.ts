@@ -111,6 +111,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Check if this payment has already been verified (idempotency check)
+    if (paymentLog.razorpayPaymentId === razorpay_payment_id && paymentLog.status === 'PAID') {
+      console.log('Payment already verified:', razorpay_payment_id);
+      return NextResponse.json({ 
+        success: true,
+        order_id: paymentLog.order.id,
+        order_number: paymentLog.order.orderNumber,
+        already_processed: true
+      });
+    }
+
+    // Check if this razorpayPaymentId already exists in another record
+    const existingPaymentWithId = await prisma.paymentLog.findFirst({
+      where: {
+        razorpayPaymentId: razorpay_payment_id,
+        id: { not: paymentLog.id }
+      }
+    });
+
+    if (existingPaymentWithId) {
+      console.warn('RazorpayPaymentId already exists in another record:', razorpay_payment_id);
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'HIGH',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Payment ID already exists in another record',
+          razorpay_payment_id,
+          existing_log_id: existingPaymentWithId.id,
+          current_log_id: paymentLog.id
+        }
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Payment ID already processed' },
+        { status: 400 }
+      );
+    }
+
     // Verify order belongs to authenticated user
     if (paymentLog.order.userId !== session.user.id) {
       await logSecurityEvent({
@@ -175,32 +216,73 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Payment verified successfully - update records
-    await retryOperation(async () => {
-      await prisma.$transaction(async (tx) => {
-        // Update payment log
-        await tx.paymentLog.update({
-          where: { id: paymentLog.id },
-          data: {
-            status: 'PAID',
-            razorpayPaymentId: razorpay_payment_id,
-            signature: razorpay_signature,
-            updatedAt: new Date()
-          }
-        });
+    // Payment verified successfully - update records with error handling
+    try {
+      await retryOperation(async () => {
+        await prisma.$transaction(async (tx) => {
+          // Update payment log
+          await tx.paymentLog.update({
+            where: { id: paymentLog.id },
+            data: {
+              status: 'PAID',
+              razorpayPaymentId: razorpay_payment_id,
+              signature: razorpay_signature,
+              updatedAt: new Date()
+            }
+          });
 
-        // Update order status (keep the same payment method as originally selected)
-        await tx.order.update({
-          where: { id: paymentLog.order.id },
-          data: {
-            paymentStatus: 'PAID',
-            status: 'CONFIRMED',
-            paymentIntentId: razorpay_payment_id,
-            updatedAt: new Date()
-          }
+          // Update order status (keep the same payment method as originally selected)
+          await tx.order.update({
+            where: { id: paymentLog.order.id },
+            data: {
+              paymentStatus: 'PAID',
+              status: 'CONFIRMED',
+              paymentIntentId: razorpay_payment_id,
+              updatedAt: new Date()
+            }
+          });
         });
       });
-    });
+    } catch (dbError: any) {
+      // Handle unique constraint violation specifically
+      if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayPaymentId')) {
+        console.warn('Duplicate razorpayPaymentId constraint violation handled in verify:', razorpay_payment_id);
+        
+        await logSecurityEvent({
+          userId: session.user.id,
+          action: 'API_ACCESS',
+          ipAddress,
+          severity: 'MEDIUM',
+          details: {
+            endpoint: '/api/razorpay/verify',
+            action: 'duplicate_constraint_handled',
+            razorpay_payment_id,
+            order_id: paymentLog.order.id
+          }
+        });
+        
+        // Check if the payment was actually processed by another request
+        const updatedPaymentLog = await prisma.paymentLog.findUnique({
+          where: { id: paymentLog.id },
+          include: { order: true }
+        });
+        
+        if (updatedPaymentLog?.status === 'PAID') {
+          return NextResponse.json({ 
+            success: true,
+            order_id: updatedPaymentLog.order.id,
+            order_number: updatedPaymentLog.order.orderNumber,
+            concurrent_processing: true
+          });
+        } else {
+          return NextResponse.json(
+            { success: false, error: 'Payment processing conflict. Please try again.' },
+            { status: 409 }
+          );
+        }
+      }
+      throw dbError; // Re-throw other database errors
+    }
 
     // Log successful payment verification
     await logSecurityEvent({

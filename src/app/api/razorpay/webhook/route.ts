@@ -135,6 +135,38 @@ async function handlePaymentSuccess(paymentEntity: any) {
       return;
     }
 
+    // Check if this payment has already been processed (idempotency check)
+    if (paymentLog.razorpayPaymentId === paymentId && paymentLog.status === 'PAID') {
+      console.log('Payment already processed:', paymentId);
+      return;
+    }
+
+    // Check if this razorpayPaymentId already exists in another record
+    const existingPaymentWithId = await prisma.paymentLog.findFirst({
+      where: {
+        razorpayPaymentId: paymentId,
+        id: { not: paymentLog.id }
+      }
+    });
+
+    if (existingPaymentWithId) {
+      console.warn('RazorpayPaymentId already exists in another record:', paymentId);
+      // Log the duplicate attempt but don't throw error
+      await logSecurityEvent({
+        action: 'API_ACCESS',
+        ipAddress: 'webhook',
+        severity: 'MEDIUM',
+        details: {
+          endpoint: '/api/razorpay/webhook',
+          action: 'duplicate_payment_id_detected',
+          payment_id: paymentId,
+          existing_log_id: existingPaymentWithId.id,
+          current_log_id: paymentLog.id
+        }
+      });
+      return;
+    }
+
     // Map Razorpay method to our internal method
     let internalMethod = paymentLog.order.paymentMethod; // Keep original if mapping fails
     if (method) {
@@ -156,30 +188,51 @@ async function handlePaymentSuccess(paymentEntity: any) {
       }
     }
 
-    // Update payment log and order status
-    await prisma.$transaction(async (tx) => {
-      await tx.paymentLog.update({
-        where: { id: paymentLog.id },
-        data: {
-          status: 'PAID',
-          razorpayPaymentId: paymentId,
-          method: method, // Store original Razorpay method
-          gatewayResponse: paymentEntity,
-          updatedAt: new Date()
-        }
-      });
+    // Update payment log and order status with error handling
+    try {
+      await prisma.$transaction(async (tx) => {
+        await tx.paymentLog.update({
+          where: { id: paymentLog.id },
+          data: {
+            status: 'PAID',
+            razorpayPaymentId: paymentId,
+            method: method, // Store original Razorpay method
+            gatewayResponse: paymentEntity,
+            updatedAt: new Date()
+          }
+        });
 
-      await tx.order.update({
-        where: { id: paymentLog.orderId },
-        data: {
-          paymentStatus: 'PAID',
-          paymentMethod: internalMethod, // Update with actual payment method used
-          status: 'CONFIRMED',
-          paymentIntentId: paymentId,
-          updatedAt: new Date()
-        }
+        await tx.order.update({
+          where: { id: paymentLog.orderId },
+          data: {
+            paymentStatus: 'PAID',
+            paymentMethod: internalMethod, // Update with actual payment method used
+            status: 'CONFIRMED',
+            paymentIntentId: paymentId,
+            updatedAt: new Date()
+          }
+        });
       });
-    });
+    } catch (dbError: any) {
+      // Handle unique constraint violation specifically
+      if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayPaymentId')) {
+        console.warn('Duplicate razorpayPaymentId constraint violation handled:', paymentId);
+        
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: 'MEDIUM',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'duplicate_constraint_handled',
+            payment_id: paymentId,
+            order_id: paymentLog.orderId
+          }
+        });
+        return; // Gracefully handle the duplicate
+      }
+      throw dbError; // Re-throw other database errors
+    }
 
     // Log successful payment processing
     await logSecurityEvent({
@@ -216,18 +269,70 @@ async function handlePaymentFailure(paymentEntity: any) {
       return;
     }
 
-    // Update payment log with failure details
-    await prisma.paymentLog.update({
-      where: { id: paymentLog.id },
-      data: {
-        status: 'FAILED',
+    // Check if this payment failure has already been processed (idempotency check)
+    if (paymentLog.razorpayPaymentId === paymentId && paymentLog.status === 'FAILED') {
+      console.log('Payment failure already processed:', paymentId);
+      return;
+    }
+
+    // Check if this razorpayPaymentId already exists in another record
+    const existingPaymentWithId = await prisma.paymentLog.findFirst({
+      where: {
         razorpayPaymentId: paymentId,
-        failureReason: `${error_code}: ${error_description}`,
-        gatewayResponse: paymentEntity,
-        retryCount: { increment: 1 },
-        updatedAt: new Date()
+        id: { not: paymentLog.id }
       }
     });
+
+    if (existingPaymentWithId) {
+      console.warn('RazorpayPaymentId already exists in another record:', paymentId);
+      await logSecurityEvent({
+        action: 'API_ACCESS',
+        ipAddress: 'webhook',
+        severity: 'MEDIUM',
+        details: {
+          endpoint: '/api/razorpay/webhook',
+          action: 'duplicate_payment_id_detected_failure',
+          payment_id: paymentId,
+          existing_log_id: existingPaymentWithId.id,
+          current_log_id: paymentLog.id
+        }
+      });
+      return;
+    }
+
+    // Update payment log with failure details, with error handling
+    try {
+      await prisma.paymentLog.update({
+        where: { id: paymentLog.id },
+        data: {
+          status: 'FAILED',
+          razorpayPaymentId: paymentId,
+          failureReason: `${error_code}: ${error_description}`,
+          gatewayResponse: paymentEntity,
+          retryCount: { increment: 1 },
+          updatedAt: new Date()
+        }
+      });
+    } catch (dbError: any) {
+      // Handle unique constraint violation specifically
+      if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayPaymentId')) {
+        console.warn('Duplicate razorpayPaymentId constraint violation handled for failure:', paymentId);
+        
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: 'MEDIUM',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'duplicate_constraint_handled_failure',
+            payment_id: paymentId,
+            order_id: paymentLog.orderId
+          }
+        });
+        return; // Gracefully handle the duplicate
+      }
+      throw dbError; // Re-throw other database errors
+    }
 
     // Log payment failure
     await logSecurityEvent({
