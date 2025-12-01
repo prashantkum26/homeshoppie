@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "NODE_OPTIONS='--no-warnings' next dev",
+    "dev:clean": "rm -rf .next && NODE_OPTIONS='--no-warnings' next dev",
     "build": "next build",
     "start": "next start",
     "test": "jest",
@@ -12,7 +13,8 @@
     "type-check": "tsc --noEmit",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "cleanup": "rm -rf .next node_modules/.cache"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",

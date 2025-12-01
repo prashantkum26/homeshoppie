@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { wishlistItems }: { wishlistItems: WishlistItem[] } = await request.json()
+    const body = await request.json()
+    const wishlistItems = body.wishlistItems || body.items || []
 
     if (!Array.isArray(wishlistItems)) {
       return NextResponse.json({ error: 'Invalid wishlist data' }, { status: 400 })
@@ -73,7 +74,6 @@ export async function POST(request: NextRequest) {
       name: item.product.name,
       price: item.product.price,
       images: item.product.images,
-      inStock: item.product.stock > 0,
       category: item.product.category?.name
     }))
 

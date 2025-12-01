@@ -300,18 +300,36 @@ async function handlePaymentFailure(paymentEntity: any) {
       return;
     }
 
-    // Update payment log with failure details, with error handling
+    // Update payment log with failure details and clear user's cart
     try {
-      await prisma.paymentLog.update({
-        where: { id: paymentLog.id },
-        data: {
-          status: 'FAILED',
-          razorpayPaymentId: paymentId,
-          failureReason: `${error_code}: ${error_description}`,
-          gatewayResponse: paymentEntity,
-          retryCount: { increment: 1 },
-          updatedAt: new Date()
-        }
+      await prisma.$transaction(async (tx) => {
+        // Update payment log with failure
+        await tx.paymentLog.update({
+          where: { id: paymentLog.id },
+          data: {
+            status: 'FAILED',
+            razorpayPaymentId: paymentId,
+            failureReason: `${error_code}: ${error_description}`,
+            gatewayResponse: paymentEntity,
+            retryCount: { increment: 1 },
+            updatedAt: new Date()
+          }
+        });
+
+        // Clear user's cart on payment failure for better UX
+        await tx.cartItem.deleteMany({
+          where: { userId: paymentLog.order.userId }
+        });
+
+        // Update order status to failed
+        await tx.order.update({
+          where: { id: paymentLog.orderId },
+          data: {
+            status: 'CANCELLED',
+            paymentStatus: 'FAILED',
+            updatedAt: new Date()
+          }
+        });
       });
     } catch (dbError: any) {
       // Handle unique constraint violation specifically

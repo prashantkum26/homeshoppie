@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import useWishlistStore from '@/store/wishlistStore'
 
 interface FormData {
   email: string
@@ -46,6 +47,14 @@ export default function SignInPage() {
         
         // Get the updated session to check user role
         const session = await getSession()
+        
+        // Sync wishlist after successful login
+        try {
+          await useWishlistStore.getState().fetchFromServer()
+          console.log('Wishlist synced after login')
+        } catch (syncError) {
+          console.error('Failed to sync wishlist after login:', syncError)
+        }
         
         // Redirect based on user role or return URL
         const urlParams = new URLSearchParams(window.location.search)

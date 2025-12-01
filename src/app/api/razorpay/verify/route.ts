@@ -197,17 +197,34 @@ export async function POST(req: NextRequest) {
         blocked: true
       });
 
-      // Update payment log with failure
-      await prisma.paymentLog.update({
-        where: { id: paymentLog.id },
-        data: {
-          status: 'FAILED',
-          failureReason: 'Invalid signature verification',
-          razorpayPaymentId: razorpay_payment_id,
-          signature: razorpay_signature,
-          retryCount: { increment: 1 },
-          updatedAt: new Date()
-        }
+      // Update payment log with failure and clear cart
+      await prisma.$transaction(async (tx) => {
+        await tx.paymentLog.update({
+          where: { id: paymentLog.id },
+          data: {
+            status: 'FAILED',
+            failureReason: 'Invalid signature verification',
+            razorpayPaymentId: razorpay_payment_id,
+            signature: razorpay_signature,
+            retryCount: { increment: 1 },
+            updatedAt: new Date()
+          }
+        });
+
+        // Clear user's cart on verification failure
+        await tx.cartItem.deleteMany({
+          where: { userId: session.user.id }
+        });
+
+        // Update order status to cancelled
+        await tx.order.update({
+          where: { id: paymentLog.order.id },
+          data: {
+            status: 'CANCELLED',
+            paymentStatus: 'FAILED',
+            updatedAt: new Date()
+          }
+        });
       });
       
       return NextResponse.json(

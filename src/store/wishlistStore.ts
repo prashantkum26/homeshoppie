@@ -69,21 +69,24 @@ const useWishlistStore = create<WishlistStore>()(
 
       syncWithServer: async () => {
         try {
-          // Check if user is logged in
-          const sessionResponse = await fetch('/api/auth/session')
-          const session = await sessionResponse.json()
+          const { items } = get()
           
-          if (session?.user?.id) {
-            const { items } = get()
-            
-            // Sync local wishlist to server
-            await fetch('/api/user/wishlist/sync', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ items }),
-            })
+          if (items.length === 0) return
+          
+          // Sync local wishlist to server
+          const response = await fetch('/api/user/wishlist/sync', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ items }),
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.wishlist) {
+              set({ items: data.wishlist })
+            }
           }
         } catch (error) {
           console.error('Failed to sync wishlist with server:', error)
@@ -97,24 +100,32 @@ const useWishlistStore = create<WishlistStore>()(
           const response = await fetch('/api/user/wishlist')
           if (response.ok) {
             const serverItems = await response.json()
-            
-            // Merge server items with local items, server takes precedence
             const { items: localItems } = get()
-            const mergedItems = [...serverItems]
             
-            // Add any local items that aren't on server
-            localItems.forEach(localItem => {
-              if (!serverItems.find((serverItem: WishlistItem) => serverItem.id === localItem.id)) {
-                mergedItems.push(localItem)
+            // If there are local items but server is empty/different, sync local to server
+            if (localItems.length > 0) {
+              const syncResponse = await fetch('/api/user/wishlist/sync', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ items: localItems }),
+              })
+              
+              if (syncResponse.ok) {
+                const syncData = await syncResponse.json()
+                if (syncData.success && syncData.wishlist) {
+                  set({ items: syncData.wishlist })
+                  return
+                }
               }
-            })
-            
-            set({ items: mergedItems })
-            
-            // Sync the merged list back to server
-            if (mergedItems.length > serverItems.length) {
-              await get().syncWithServer()
             }
+            
+            // If no local items or sync failed, use server items
+            set({ items: serverItems })
+          } else if (response.status === 401) {
+            // User not authenticated, keep local items
+            console.log('User not authenticated, keeping local wishlist')
           }
         } catch (error) {
           console.error('Failed to fetch wishlist from server:', error)
