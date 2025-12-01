@@ -1,0 +1,331 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { verifyWebhookSignature, RAZORPAY_CONFIG } from "@/lib/razorpay";
+import { logSecurityEvent, getClientIP } from "@/lib/security";
+
+export async function POST(req: NextRequest) {
+  const ipAddress = getClientIP(req);
+  
+  try {
+    // Get raw body for signature verification
+    const body = await req.text();
+    const signature = req.headers.get('x-razorpay-signature');
+
+    if (!signature) {
+      await logSecurityEvent({
+        action: 'UNAUTHORIZED_ACCESS',
+        ipAddress,
+        severity: 'HIGH',
+        details: { 
+          endpoint: '/api/razorpay/webhook', 
+          reason: 'Missing webhook signature'
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { error: 'Missing signature' },
+        { status: 401 }
+      );
+    }
+
+    // Verify webhook signature
+    const isValidSignature = verifyWebhookSignature(body, signature);
+    if (!isValidSignature) {
+      await logSecurityEvent({
+        action: 'UNAUTHORIZED_ACCESS',
+        ipAddress,
+        severity: 'CRITICAL',
+        details: { 
+          endpoint: '/api/razorpay/webhook', 
+          reason: 'Invalid webhook signature',
+          provided_signature: signature.substring(0, 20) + '...' // Log partial for security
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+    // Parse the webhook payload
+    const event = JSON.parse(body);
+    const { event: eventType, payload } = event;
+
+    // Log webhook received
+    await logSecurityEvent({
+      action: 'API_ACCESS',
+      ipAddress,
+      severity: 'LOW',
+      details: {
+        endpoint: '/api/razorpay/webhook',
+        action: 'webhook_received',
+        event_type: eventType,
+        entity_id: payload?.payment?.entity?.id || payload?.order?.entity?.id
+      }
+    });
+
+    // Handle different webhook events
+    switch (eventType) {
+      case 'payment.authorized':
+      case 'payment.captured':
+        await handlePaymentSuccess(payload.payment.entity);
+        break;
+        
+      case 'payment.failed':
+        await handlePaymentFailure(payload.payment.entity);
+        break;
+        
+      case 'order.paid':
+        await handleOrderPaid(payload.order.entity);
+        break;
+        
+      default:
+        // Log unknown event types for monitoring
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress,
+          severity: 'LOW',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'unknown_event_type',
+            event_type: eventType
+          }
+        });
+        break;
+    }
+
+    return NextResponse.json({ status: 'success' });
+
+  } catch (error: any) {
+    console.error('Webhook processing failed:', error);
+    
+    await logSecurityEvent({
+      action: 'API_ACCESS',
+      ipAddress,
+      severity: 'HIGH',
+      details: {
+        endpoint: '/api/razorpay/webhook',
+        error: error.message,
+        action: 'webhook_processing_failed'
+      }
+    });
+
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    );
+  }
+}
+
+async function handlePaymentSuccess(paymentEntity: any) {
+  try {
+    const { id: paymentId, order_id: razorpayOrderId, amount, status, method } = paymentEntity;
+
+    // Find payment log
+    const paymentLog = await prisma.paymentLog.findFirst({
+      where: { razorpayOrderId },
+      include: { order: true }
+    });
+
+    if (!paymentLog) {
+      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      return;
+    }
+
+    // Map Razorpay method to our internal method
+    let internalMethod = paymentLog.order.paymentMethod; // Keep original if mapping fails
+    if (method) {
+      switch (method.toLowerCase()) {
+        case 'card':
+          internalMethod = 'card';
+          break;
+        case 'upi':
+          internalMethod = 'upi';
+          break;
+        case 'netbanking':
+          internalMethod = 'netbanking';
+          break;
+        case 'wallet':
+          internalMethod = 'wallet';
+          break;
+        default:
+          internalMethod = method.toLowerCase();
+      }
+    }
+
+    // Update payment log and order status
+    await prisma.$transaction(async (tx) => {
+      await tx.paymentLog.update({
+        where: { id: paymentLog.id },
+        data: {
+          status: 'PAID',
+          razorpayPaymentId: paymentId,
+          method: method, // Store original Razorpay method
+          gatewayResponse: paymentEntity,
+          updatedAt: new Date()
+        }
+      });
+
+      await tx.order.update({
+        where: { id: paymentLog.orderId },
+        data: {
+          paymentStatus: 'PAID',
+          paymentMethod: internalMethod, // Update with actual payment method used
+          status: 'CONFIRMED',
+          paymentIntentId: paymentId,
+          updatedAt: new Date()
+        }
+      });
+    });
+
+    // Log successful payment processing
+    await logSecurityEvent({
+      action: 'API_ACCESS',
+      ipAddress: 'webhook',
+      severity: 'LOW',
+      details: {
+        endpoint: '/api/razorpay/webhook',
+        action: 'payment_success_processed',
+        payment_id: paymentId,
+        order_id: paymentLog.orderId,
+        amount: amount / 100 // Convert from paise
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Failed to process payment success:', error);
+    throw error;
+  }
+}
+
+async function handlePaymentFailure(paymentEntity: any) {
+  try {
+    const { id: paymentId, order_id: razorpayOrderId, error_code, error_description } = paymentEntity;
+
+    // Find payment log
+    const paymentLog = await prisma.paymentLog.findFirst({
+      where: { razorpayOrderId },
+      include: { order: true }
+    });
+
+    if (!paymentLog) {
+      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      return;
+    }
+
+    // Update payment log with failure details
+    await prisma.paymentLog.update({
+      where: { id: paymentLog.id },
+      data: {
+        status: 'FAILED',
+        razorpayPaymentId: paymentId,
+        failureReason: `${error_code}: ${error_description}`,
+        gatewayResponse: paymentEntity,
+        retryCount: { increment: 1 },
+        updatedAt: new Date()
+      }
+    });
+
+    // Log payment failure
+    await logSecurityEvent({
+      action: 'API_ACCESS',
+      ipAddress: 'webhook',
+      severity: 'MEDIUM',
+      details: {
+        endpoint: '/api/razorpay/webhook',
+        action: 'payment_failure_processed',
+        payment_id: paymentId,
+        order_id: paymentLog.orderId,
+        error_code,
+        error_description
+      }
+    });
+
+  } catch (error: any) {
+    console.error('Failed to process payment failure:', error);
+    throw error;
+  }
+}
+
+async function handleOrderPaid(orderEntity: any) {
+  try {
+    const { id: razorpayOrderId, amount_paid, status } = orderEntity;
+
+    // Find payment log
+    const paymentLog = await prisma.paymentLog.findFirst({
+      where: { razorpayOrderId },
+      include: { order: true }
+    });
+
+    if (!paymentLog) {
+      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      return;
+    }
+
+    // Double-check that the order is fully paid
+    if (status === 'paid' && amount_paid >= paymentLog.amount * 100) {
+      await prisma.$transaction(async (tx) => {
+        await tx.paymentLog.update({
+          where: { id: paymentLog.id },
+          data: {
+            status: 'PAID',
+            gatewayResponse: orderEntity,
+            updatedAt: new Date()
+          }
+        });
+
+        await tx.order.update({
+          where: { id: paymentLog.orderId },
+          data: {
+            paymentStatus: 'PAID',
+            status: 'CONFIRMED',
+            updatedAt: new Date()
+          }
+        });
+      });
+
+      // Log order paid processing
+      await logSecurityEvent({
+        action: 'API_ACCESS',
+        ipAddress: 'webhook',
+        severity: 'LOW',
+        details: {
+          endpoint: '/api/razorpay/webhook',
+          action: 'order_paid_processed',
+          razorpay_order_id: razorpayOrderId,
+          order_id: paymentLog.orderId,
+          amount_paid: amount_paid / 100
+        }
+      });
+    }
+
+  } catch (error: any) {
+    console.error('Failed to process order paid:', error);
+    throw error;
+  }
+}
+
+// Only allow POST requests
+export async function GET() {
+  return NextResponse.json(
+    { error: 'Method not allowed' },
+    { status: 405 }
+  );
+}
+
+export async function PUT() {
+  return NextResponse.json(
+    { error: 'Method not allowed' },
+    { status: 405 }
+  );
+}
+
+export async function DELETE() {
+  return NextResponse.json(
+    { error: 'Method not allowed' },
+    { status: 405 }
+  );
+}

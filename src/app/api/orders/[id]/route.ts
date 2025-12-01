@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 // GET single order
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -17,7 +17,7 @@ export async function GET(
       )
     }
 
-    const orderId = params.id
+    const { id: orderId } = await params
 
     const order = await prisma.order.findFirst({
       where: {
@@ -42,6 +42,18 @@ export async function GET(
             state: true,
             pincode: true,
           }
+        },
+        paymentLogs: {
+          select: {
+            id: true,
+            status: true,
+            method: true,
+            razorpayOrderId: true,
+            razorpayPaymentId: true,
+            failureReason: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: 'desc' }
         }
       }
     })

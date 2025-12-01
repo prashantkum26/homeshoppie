@@ -17,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 import toast from 'react-hot-toast'
 
 interface Product {
@@ -69,11 +70,14 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [quantity, setQuantity] = useState(1)
-  const [isLiked, setIsLiked] = useState(false)
   const [activeTab, setActiveTab] = useState('description')
   const [loading, setLoading] = useState(true)
   
   const { addItem } = useCartStore()
+  const { addToWishlist, removeFromWishlist, isInWishlist } = useWishlistStore()
+  
+  // Check if product is in wishlist
+  const isLiked = product ? isInWishlist(product.id) : false
 
   const fetchProduct = async () => {
     setLoading(true)
@@ -133,8 +137,20 @@ export default function ProductPage() {
   }
 
   const toggleLike = () => {
-    setIsLiked(!isLiked)
-    toast.success(isLiked ? 'Removed from wishlist' : 'Added to wishlist')
+    if (!product) return
+    
+    if (isLiked) {
+      removeFromWishlist(product.id)
+      toast.success('Removed from wishlist')
+    } else {
+      addToWishlist({
+        id: product.id,
+        name: product.name,
+        price: product.price,
+        images: product.images || []
+      })
+      toast.success('Added to wishlist')
+    }
   }
 
   const handleShare = async () => {

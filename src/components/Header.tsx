@@ -8,9 +8,11 @@ import {
   UserIcon, 
   Bars3Icon, 
   XMarkIcon,
-  MagnifyingGlassIcon 
+  MagnifyingGlassIcon,
+  HeartIcon
 } from '@heroicons/react/24/outline'
 import useCartStore from '@/store/cartStore'
+import useWishlistStore from '@/store/wishlistStore'
 
 interface NavigationItem {
   name: string
@@ -28,21 +30,38 @@ const navigation: NavigationItem[] = [
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false)
-  const [totalItems, setTotalItems] = useState<number>(0)
   const [isClient, setIsClient] = useState<boolean>(false)
+  const [totalItems, setTotalItems] = useState<number>(0)
+  const [wishlistCount, setWishlistCount] = useState<number>(0)
   const { data: session } = useSession()
-  const { getTotalItems } = useCartStore()
+  
+  // Store references for subscriptions
+  const cartStore = useCartStore()
+  const wishlistStore = useWishlistStore()
   
   useEffect(() => {
     setIsClient(true)
-    setTotalItems(getTotalItems())
-  }, [getTotalItems])
-
-  useEffect(() => {
-    if (isClient) {
-      setTotalItems(getTotalItems())
+    
+    // Only update counts after client-side hydration to prevent hydration mismatch
+    if (typeof window !== 'undefined') {
+      setTotalItems(cartStore.getTotalItems())
+      setWishlistCount(wishlistStore.getWishlistCount())
+      
+      // Subscribe to store changes
+      const unsubscribeCart = useCartStore.subscribe((state) => {
+        setTotalItems(state.getTotalItems())
+      })
+      
+      const unsubscribeWishlist = useWishlistStore.subscribe((state) => {
+        setWishlistCount(state.getWishlistCount())
+      })
+      
+      return () => {
+        unsubscribeCart()
+        unsubscribeWishlist()
+      }
     }
-  }, [getTotalItems, isClient])
+  }, [cartStore, wishlistStore])
 
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
@@ -86,6 +105,16 @@ export default function Header() {
 
           {/* Right side actions */}
           <div className="hidden md:flex items-center space-x-4">
+            {/* Wishlist */}
+            <Link href="/wishlist" className="relative p-2" title="My Wishlist">
+              <HeartIcon className="h-6 w-6 text-gray-700 hover:text-red-500 transition-colors" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {wishlistCount}
+                </span>
+              )}
+            </Link>
+
             {/* Cart */}
             <Link href="/cart" className="relative p-2">
               <ShoppingCartIcon className="h-6 w-6 text-gray-700 hover:text-primary-600" />

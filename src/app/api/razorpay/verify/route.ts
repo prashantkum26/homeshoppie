@@ -1,18 +1,258 @@
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
+import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { verifyPaymentSignature, retryOperation } from "@/lib/razorpay";
+import { logSecurityEvent, checkRateLimit, getClientIP } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature } =
-    await req.json();
+  const ipAddress = getClientIP(req);
+  
+  try {
+    // Authentication check
+    const session = await auth();
+    if (!session?.user?.id) {
+      await logSecurityEvent({
+        action: 'UNAUTHORIZED_ACCESS',
+        ipAddress,
+        severity: 'HIGH',
+        details: { endpoint: '/api/razorpay/verify', reason: 'No authentication' },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized access' },
+        { status: 401 }
+      );
+    }
 
-  const expected = crypto
-    .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET!)
-    .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-    .digest("hex");
+    // Rate limiting check
+    const rateLimit = await checkRateLimit(req, '/api/razorpay/verify', session.user.id);
+    if (!rateLimit.allowed) {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'MEDIUM',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Rate limit exceeded',
+          requests: rateLimit.remaining 
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      );
+    }
 
-  if (expected === razorpay_signature) {
-    return NextResponse.json({ success: true });
+    const body = await req.json();
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
+
+    // Validate required fields
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'MEDIUM',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Missing required payment verification fields',
+          provided_fields: {
+            order_id: !!razorpay_order_id,
+            payment_id: !!razorpay_payment_id,
+            signature: !!razorpay_signature
+          }
+        }
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Missing required fields' },
+        { status: 400 }
+      );
+    }
+
+    // Find payment log entry
+    const paymentLog = await prisma.paymentLog.findFirst({
+      where: {
+        razorpayOrderId: razorpay_order_id
+      },
+      include: {
+        order: {
+          select: {
+            userId: true,
+            id: true,
+            orderNumber: true,
+            totalAmount: true
+          }
+        }
+      }
+    });
+
+    if (!paymentLog) {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'HIGH',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Payment order not found',
+          razorpay_order_id
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Payment order not found' },
+        { status: 404 }
+      );
+    }
+
+    // Verify order belongs to authenticated user
+    if (paymentLog.order.userId !== session.user.id) {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'UNAUTHORIZED_ACCESS',
+        ipAddress,
+        severity: 'CRITICAL',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Attempting to verify payment for another user\'s order',
+          razorpay_order_id,
+          order_owner: paymentLog.order.userId
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Unauthorized access' },
+        { status: 403 }
+      );
+    }
+
+    // Verify payment signature using secure function
+    const isValidSignature = verifyPaymentSignature(
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature
+    );
+
+    if (!isValidSignature) {
+      // Log failed verification attempt
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'HIGH',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Invalid payment signature',
+          razorpay_order_id,
+          razorpay_payment_id
+        },
+        blocked: true
+      });
+
+      // Update payment log with failure
+      await prisma.paymentLog.update({
+        where: { id: paymentLog.id },
+        data: {
+          status: 'FAILED',
+          failureReason: 'Invalid signature verification',
+          razorpayPaymentId: razorpay_payment_id,
+          signature: razorpay_signature,
+          retryCount: { increment: 1 },
+          updatedAt: new Date()
+        }
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Payment verification failed' },
+        { status: 400 }
+      );
+    }
+
+    // Payment verified successfully - update records
+    await retryOperation(async () => {
+      await prisma.$transaction(async (tx) => {
+        // Update payment log
+        await tx.paymentLog.update({
+          where: { id: paymentLog.id },
+          data: {
+            status: 'PAID',
+            razorpayPaymentId: razorpay_payment_id,
+            signature: razorpay_signature,
+            updatedAt: new Date()
+          }
+        });
+
+        // Update order status (keep the same payment method as originally selected)
+        await tx.order.update({
+          where: { id: paymentLog.order.id },
+          data: {
+            paymentStatus: 'PAID',
+            status: 'CONFIRMED',
+            paymentIntentId: razorpay_payment_id,
+            updatedAt: new Date()
+          }
+        });
+      });
+    });
+
+    // Log successful payment verification
+    await logSecurityEvent({
+      userId: session.user.id,
+      action: 'API_ACCESS',
+      ipAddress,
+      severity: 'LOW',
+      details: {
+        endpoint: '/api/razorpay/verify',
+        action: 'payment_verified',
+        razorpay_order_id,
+        razorpay_payment_id,
+        order_number: paymentLog.order.orderNumber,
+        amount: paymentLog.order.totalAmount
+      }
+    });
+
+    return NextResponse.json({ 
+      success: true,
+      order_id: paymentLog.order.id,
+      order_number: paymentLog.order.orderNumber
+    });
+
+  } catch (error: any) {
+    console.error('Razorpay payment verification failed:', error);
+    
+    // Log the error for security monitoring
+    const session = await auth();
+    const logData: any = {
+      action: 'API_ACCESS',
+      ipAddress,
+      severity: 'CRITICAL',
+      details: {
+        endpoint: '/api/razorpay/verify',
+        error: error.message,
+        action: 'payment_verification_failed'
+      }
+    };
+    
+    if (session?.user?.id) {
+      logData.userId = session.user.id;
+    }
+    
+    await logSecurityEvent(logData);
+
+    return NextResponse.json(
+      { 
+        success: false,
+        error: 'Payment verification failed. Please contact support.',
+        code: 'VERIFICATION_ERROR'
+      },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ success: false }, { status: 400 });
 }

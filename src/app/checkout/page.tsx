@@ -232,45 +232,66 @@ export default function CheckoutPage() {
         return;
       }
 
-      // --- 3️⃣ Create Razorpay order ---
+      // --- 3️⃣ Create secure Razorpay order ---
       const rzpOrderRes = await fetch("/api/razorpay/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           amount: subtotal + shippingFee,
-          receipt: internalOrder.id,
+          orderId: internalOrder.id,
+          receipt: `receipt_${internalOrder.orderNumber}`,
+          notes: {
+            customer_name: formData.shippingAddress.name,
+            customer_email: session?.user?.email || "",
+            order_number: internalOrder.orderNumber
+          }
         })
       });
+
+      if (!rzpOrderRes.ok) {
+        const errorData = await rzpOrderRes.json();
+        throw new Error(errorData.error || 'Failed to create payment order');
+      }
 
       const rzpOrder = await rzpOrderRes.json();
 
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID!,
         amount: rzpOrder.amount,
-        currency: "INR",
+        currency: rzpOrder.currency || "INR",
         name: "HomeShoppie",
-        description: "Order Payment",
+        description: `Payment for Order ${internalOrder.orderNumber}`,
         order_id: rzpOrder.id,
         handler: async function (response: any) {
-          // --- 5️⃣ Verify payment ---
-          const verifyRes = await fetch("/api/razorpay/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(response),
-          });
-
-          const verified = await verifyRes.json();
-
-          if (verified.success) {
-            // update internal order as paid
-            await fetch(`/api/orders/${internalOrder.id}/pay`, {
-              method: "PATCH"
+          try {
+            // --- 5️⃣ Verify payment with enhanced security ---
+            const verifyRes = await fetch("/api/razorpay/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              }),
             });
 
-            clearCart();
-            router.push(`/order-success?orderId=${internalOrder.id}`);
-          } else {
-            toast.error("Payment verification failed");
+            const verified = await verifyRes.json();
+
+            if (verified.success) {
+              clearCart();
+              toast.success("Payment successful! Redirecting...");
+              router.push(`/order-success?orderId=${verified.order_id}&orderNumber=${verified.order_number}`);
+            } else {
+              toast.error("Payment verification failed. Please contact support if amount was deducted.");
+            }
+          } catch (verifyError) {
+            console.error('Payment verification error:', verifyError);
+            toast.error("Payment verification failed. Please contact support.");
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            toast.error("Payment cancelled. Your order is saved and you can complete payment later.");
           }
         },
         prefill: {
@@ -278,10 +299,41 @@ export default function CheckoutPage() {
           email: session?.user?.email || "",
           contact: formData.shippingAddress.phone
         },
-        theme: { color: "#00A96E" }
+        notes: {
+          order_id: internalOrder.id,
+          order_number: internalOrder.orderNumber
+        },
+        theme: { 
+          color: "#00A96E",
+          backdrop_color: "rgba(0, 0, 0, 0.6)"
+        },
+        retry: {
+          enabled: true,
+          max_count: 3
+        },
+        timeout: 300, // 5 minutes timeout
+        remember_customer: false
       };
 
       const payment = new window.Razorpay(options);
+      
+      // Enhanced error handling for payment
+      payment.on('payment.failed', function (response: any) {
+        console.error('Payment failed:', response.error);
+        toast.error(`Payment failed: ${response.error.description}`);
+        
+        // Log payment failure (optional - could call an endpoint to log)
+        fetch('/api/payment-failure-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: internalOrder.id,
+            error: response.error,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(console.error);
+      });
+
       payment.open();
 
       // Redirect to payment page
