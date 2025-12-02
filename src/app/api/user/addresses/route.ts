@@ -41,10 +41,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, phone, street, city, state, pincode, landmark, type, isDefault = false } = body
+    const { name, phone, street1, street2, city, state, postalCode, landmark, type, isDefault = false } = body
 
     // Validate required fields
-    if (!name || !phone || !street || !city || !state || !pincode) {
+    if (!name || !phone || !street1 || !city || !state || !postalCode) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -75,9 +75,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (pincode.length < 6) {
+    if (postalCode.length < 6) {
       return NextResponse.json(
-        { error: 'Pincode must be at least 6 characters' },
+        { error: 'Postal code must be at least 6 characters' },
         { status: 400 }
       )
     }
@@ -93,10 +93,11 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           name,
           phone,
-          street,
+          street1,
+          street2: street2 || "",
           city,
           state,
-          pincode,
+          postalCode,
           landmark: landmark || "",
           type: type || 'HOME'
         }
