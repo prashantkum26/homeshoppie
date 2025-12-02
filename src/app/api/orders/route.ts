@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       shippingAddress: {
         state: shippingAddress.state,
         city: shippingAddress.city || '',
-        pincode: shippingAddress.pincode || ''
+        pincode: shippingAddress.postalCode || ''
       },
       userId: session.user.id
     })
@@ -148,11 +148,12 @@ export async function POST(request: NextRequest) {
             userId: session.user.id,
             name: shippingAddress.name,
             phone: shippingAddress.phone,
-            street: shippingAddress.street,
+            street1: shippingAddress.street1,
+            street2: shippingAddress.street2 || '',
             city: shippingAddress.city,
             state: shippingAddress.state,
-            pincode: shippingAddress.pincode,
-            landmark: shippingAddress.landmark,
+            postalCode: shippingAddress.postalCode,
+            landmark: shippingAddress.landmark || '',
             type: shippingAddress.type || 'HOME'
           }
         })
