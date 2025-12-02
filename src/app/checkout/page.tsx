@@ -186,9 +186,9 @@ export default function CheckoutPage() {
     
     try {
       if (errorType === 'failed') {
-        setErrorMessage('Payment failed. Saving your order for retry...')
+        setErrorMessage('Payment failed. Your order is saved for retry...')
         
-        // Log payment failure (simplified - just console log since API might not exist)
+        // Log payment failure for debugging (client-side only)
         console.log('Payment failed:', {
           orderId,
           error: errorDetails,
@@ -199,7 +199,8 @@ export default function CheckoutPage() {
         setErrorMessage('Redirecting to orders...')
         await new Promise(resolve => setTimeout(resolve, 500))
         
-        // Don't clear cart for failed payments - user can retry
+        // SECURITY: Don't update payment status from client side!
+        // Payment status is handled by server-side verification only
         toast.error('Payment failed. Your order is saved and you can retry payment from your orders page.')
         router.push(`/orders?highlight=${orderId}&status=payment_failed`)
         
