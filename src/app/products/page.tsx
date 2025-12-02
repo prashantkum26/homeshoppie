@@ -70,51 +70,68 @@ export default function ProductsPage() {
 
   const { addItem } = useCartStore()
 
-  const fetchProducts = async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({
-        page: currentPage.toString(),
-        limit: '20',
-        sort: sortBy
-      })
+  useEffect(() => {
+    let isMounted = true
+    
+    const fetchProducts = async () => {
+      if (!isMounted) return
+      
+      try {
+        const params = new URLSearchParams({
+          page: currentPage.toString(),
+          limit: '20',
+          sort: sortBy
+        })
 
-      if (searchQuery) params.append('search', searchQuery)
-      if (filterCategory) params.append('categorySlug', filterCategory)
-      if (priceRange.min) params.append('minPrice', priceRange.min)
-      if (priceRange.max) params.append('maxPrice', priceRange.max)
+        if (searchQuery) params.append('search', searchQuery)
+        if (filterCategory) params.append('categorySlug', filterCategory)
+        if (priceRange.min) params.append('minPrice', priceRange.min)
+        if (priceRange.max) params.append('maxPrice', priceRange.max)
 
-      const response = await fetch(`/api/products?${params}`)
-      if (!response.ok) {
-        throw new Error('Failed to fetch products')
+        const response = await fetch(`/api/products?${params}`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch products')
+        }
+
+        const data: ProductsResponse = await response.json()
+        
+        if (isMounted) {
+          setProducts(data.data)
+          setPagination(data.pagination)
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error fetching products:', error)
+        if (isMounted) {
+          toast.error('Failed to load products')
+          setLoading(false)
+        }
       }
-
-      const data: ProductsResponse = await response.json()
-      setProducts(data.data)
-      setPagination(data.pagination)
-    } catch (error) {
-      console.error('Error fetching products:', error)
-      toast.error('Failed to load products')
-    } finally {
-      setLoading(false)
     }
-  }
 
-  useEffect(() => {
-    fetchProducts()
-  }, [currentPage, sortBy, filterCategory, priceRange])
+    // Handle search with debouncing
+    if (searchQuery) {
+      const delayedSearch = setTimeout(() => {
+        if (currentPage !== 1) {
+          setCurrentPage(1)
+        } else {
+          fetchProducts()
+        }
+      }, 500)
 
-  useEffect(() => {
-    const delayedSearch = setTimeout(() => {
-      if (currentPage !== 1) {
-        setCurrentPage(1)
-      } else {
-        fetchProducts()
+      return () => {
+        clearTimeout(delayedSearch)
+        isMounted = false
       }
-    }, 500)
+    } else {
+      // Immediate fetch for non-search filters
+      fetchProducts()
+    }
 
-    return () => clearTimeout(delayedSearch)
-  }, [searchQuery])
+    return () => {
+      isMounted = false
+    }
+  }, [currentPage, sortBy, filterCategory, priceRange, searchQuery])
 
   const handleAddToCart = (product: Product) => {
     if (!product.inStock) {

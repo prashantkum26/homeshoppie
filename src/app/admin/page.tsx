@@ -58,9 +58,56 @@ export default function AdminDashboard() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    let isMounted = true
+    
     if (status === 'unauthenticated') {
       router.push('/auth/signin')
       return
+    }
+
+    const fetchAdminData = async () => {
+      if (!isMounted || status !== 'authenticated' || session?.user?.role !== 'ADMIN') return
+      
+      try {
+        // Fetch all admin data concurrently to reduce total API calls
+        const [statsRes, usersRes, productsRes, ordersRes] = await Promise.all([
+          fetch('/api/admin/stats'),
+          fetch('/api/admin/users'),
+          fetch('/api/admin/products'),
+          fetch('/api/admin/orders')
+        ])
+        
+        if (!isMounted) return // Check if component is still mounted
+        
+        if (statsRes.ok) {
+          const statsData = await statsRes.json()
+          if (isMounted) setStats(statsData)
+        }
+
+        if (usersRes.ok) {
+          const usersData = await usersRes.json()
+          if (isMounted) setUsers(usersData)
+        }
+
+        if (productsRes.ok) {
+          const productsData = await productsRes.json()
+          if (isMounted) setProducts(productsData)
+        }
+
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json()
+          if (isMounted) setOrders(ordersData)
+        }
+      } catch (error) {
+        console.error('Error fetching admin data:', error)
+        if (isMounted) {
+          toast.error('Failed to load admin data')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
     }
 
     if (status === 'authenticated') {
@@ -72,35 +119,40 @@ export default function AdminDashboard() {
       
       fetchAdminData()
     }
-  }, [status, session, router])
+
+    return () => {
+      isMounted = false
+    }
+  }, [status, session?.user?.role, router]) // Only depend on essential values
 
   const fetchAdminData = async () => {
+    // This function is now defined inside useEffect to prevent re-renders
+    // Keep it here for other functions that might need to refresh data
     try {
       setIsLoading(true)
       
-      // Fetch dashboard stats
-      const statsRes = await fetch('/api/admin/stats')
+      const [statsRes, usersRes, productsRes, ordersRes] = await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/users'),
+        fetch('/api/admin/products'),
+        fetch('/api/admin/orders')
+      ])
+      
       if (statsRes.ok) {
         const statsData = await statsRes.json()
         setStats(statsData)
       }
 
-      // Fetch all users (for users tab)
-      const usersRes = await fetch('/api/admin/users')
       if (usersRes.ok) {
         const usersData = await usersRes.json()
         setUsers(usersData)
       }
 
-      // Fetch all products (for products tab)
-      const productsRes = await fetch('/api/admin/products')
       if (productsRes.ok) {
         const productsData = await productsRes.json()
         setProducts(productsData)
       }
 
-      // Fetch all orders (for orders tab)
-      const ordersRes = await fetch('/api/admin/orders')
       if (ordersRes.ok) {
         const ordersData = await ordersRes.json()
         setOrders(ordersData)

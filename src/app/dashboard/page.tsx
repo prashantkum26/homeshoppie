@@ -39,40 +39,54 @@ export default function Dashboard() {
   const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
+    let isMounted = true
+    
     if (status === 'unauthenticated') {
       router.push('/auth/signin')
       return
     }
 
+    const fetchUserData = async () => {
+      if (!isMounted || status !== 'authenticated' || !session?.user) return
+      
+      try {
+        // Fetch both profile and orders concurrently to reduce calls
+        const [profileRes, ordersRes] = await Promise.all([
+          fetch('/api/user/profile'),
+          fetch('/api/user/orders')
+        ])
+        
+        if (!isMounted) return // Check if component is still mounted
+        
+        if (profileRes.ok) {
+          const profileData = await profileRes.json()
+          if (isMounted) setProfile(profileData)
+        }
+
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json()
+          if (isMounted) setOrders(ordersData)
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error)
+        if (isMounted) {
+          toast.error('Failed to load user data')
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
+      }
+    }
+
     if (status === 'authenticated' && session?.user) {
       fetchUserData()
     }
-  }, [status, session, router])
 
-  const fetchUserData = async () => {
-    try {
-      setIsLoading(true)
-      
-      // Fetch user profile
-      const profileRes = await fetch('/api/user/profile')
-      if (profileRes.ok) {
-        const profileData = await profileRes.json()
-        setProfile(profileData)
-      }
-
-      // Fetch user orders
-      const ordersRes = await fetch('/api/user/orders')
-      if (ordersRes.ok) {
-        const ordersData = await ordersRes.json()
-        setOrders(ordersData)
-      }
-    } catch (error) {
-      console.error('Error fetching user data:', error)
-      toast.error('Failed to load user data')
-    } finally {
-      setIsLoading(false)
+    return () => {
+      isMounted = false
     }
-  }
+  }, [status, session?.user?.id, router]) // Only depend on essential values
 
   const handleProfileUpdate = async (formData: FormData) => {
     try {

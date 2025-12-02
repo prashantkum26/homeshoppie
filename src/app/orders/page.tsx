@@ -47,30 +47,46 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<string>('all')
 
   useEffect(() => {
+    let isMounted = true
+    
     if (status === 'unauthenticated') {
       router.push('/auth/signin?callbackUrl=/orders')
       return
     }
 
-    fetchOrders()
-  }, [status, router])
-
-  const fetchOrders = async () => {
-    try {
-      const response = await fetch('/api/orders')
+    const fetchOrders = async () => {
+      if (!isMounted || status !== 'authenticated') return
       
-      if (response.ok) {
-        const ordersData = await response.json()
-        setOrders(ordersData)
-      } else {
-        console.error('Failed to fetch orders')
+      try {
+        const response = await fetch('/api/orders')
+        
+        if (!isMounted) return // Check if component is still mounted
+        
+        if (response.ok) {
+          const ordersData = await response.json()
+          if (isMounted) {
+            setOrders(ordersData)
+          }
+        } else {
+          console.error('Failed to fetch orders')
+        }
+      } catch (error) {
+        console.error('Error fetching orders:', error)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
-    } catch (error) {
-      console.error('Error fetching orders:', error)
-    } finally {
-      setIsLoading(false)
     }
-  }
+
+    if (status === 'authenticated') {
+      fetchOrders()
+    }
+
+    return () => {
+      isMounted = false
+    }
+  }, [status, router])
 
   const getStatusIcon = (status: string) => {
     switch (status) {

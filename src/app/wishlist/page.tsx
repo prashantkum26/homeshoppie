@@ -33,12 +33,28 @@ export default function WishlistPage() {
   const [localItems, setLocalItems] = useState<WishlistItem[]>([])
 
   useEffect(() => {
-    if (session?.user) {
-      fetchFromServer()
+    let isMounted = true
+    
+    const syncWishlist = async () => {
+      if (!isMounted) return
+      
+      if (session?.user) {
+        await fetchFromServer()
+      }
+      
+      if (isMounted) {
+        setLocalItems(items)
+      }
     }
-  }, [session?.user]) // Only depend on user session, not the function itself
 
-  // Separate useEffect for updating local items
+    syncWishlist()
+
+    return () => {
+      isMounted = false
+    }
+  }, [session?.user]) // Only depend on user session
+
+  // Update local items when store items change
   useEffect(() => {
     setLocalItems(items)
   }, [items])

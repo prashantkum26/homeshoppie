@@ -37,25 +37,37 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
 
-  const fetchCategories = async () => {
-    setLoading(true)
-    try {
-      const response = await fetch('/api/categories')
-      if (!response.ok) throw new Error('Failed to fetch categories')
-      
-      const result = await response.json()
-      // Handle the wrapped API response
-      const categories = result.success ? result.data : []
-      setCategories(categories || [])
-    } catch (error) {
-      console.error('Error fetching categories:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
+    let isMounted = true
+    
+    const fetchCategories = async () => {
+      if (!isMounted) return
+      
+      try {
+        const response = await fetch('/api/categories')
+        if (!response.ok) throw new Error('Failed to fetch categories')
+        
+        const result = await response.json()
+        // Handle the wrapped API response
+        const categories = result.success ? result.data : []
+        
+        if (isMounted) {
+          setCategories(categories || [])
+          setLoading(false)
+        }
+      } catch (error) {
+        console.error('Error fetching categories:', error)
+        if (isMounted) {
+          setLoading(false)
+        }
+      }
+    }
+
     fetchCategories()
+
+    return () => {
+      isMounted = false
+    }
   }, [])
 
   const filteredCategories = categories.filter(category =>
