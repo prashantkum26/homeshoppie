@@ -247,22 +247,28 @@ const users = [
   }
 ]
 
+
 async function main() {
   console.log('🌱 Starting database seeding...')
 
-  // Clean up existing data
+  // Clean up existing data (order matters due to foreign key constraints)
+  await prisma.paymentLog.deleteMany()
   await prisma.orderItem.deleteMany()
   await prisma.order.deleteMany()
+  await prisma.savedForLater.deleteMany()
+  await prisma.wishlist.deleteMany()
   await prisma.cartItem.deleteMany()
   await prisma.address.deleteMany()
   await prisma.product.deleteMany()
   await prisma.category.deleteMany()
-  await prisma.account.deleteMany()
   await prisma.session.deleteMany()
+  await prisma.account.deleteMany()
+  await prisma.securityLog.deleteMany()
+  await prisma.rateLimit.deleteMany()
   await prisma.user.deleteMany()
 
   // Create users
-  console.log('👤 Creating users...')
+  console.log('� Creating users...')
   for (const userData of users) {
     const hashedPassword = await bcrypt.hash(userData.password, 12)
     await prisma.user.create({

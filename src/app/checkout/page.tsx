@@ -34,6 +34,8 @@ export default function CheckoutPage() {
   const router = useRouter()
   const { items, getTotal, getTotalItems, clearCart } = useCartStore()
   const [isLoading, setIsLoading] = useState(false)
+  const [isProcessingError, setIsProcessingError] = useState(false)
+  const [errorMessage, setErrorMessage] = useState('')
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
   const [formData, setFormData] = useState<CheckoutForm>({
     shippingAddress: {
@@ -150,6 +152,44 @@ export default function CheckoutPage() {
     }
 
     return true
+  }
+
+  const handlePaymentError = async (orderId: string, errorType: 'failed' | 'cancelled', errorDetails?: any) => {
+    setIsProcessingError(true)
+    setErrorMessage(errorType === 'failed' ? 'Processing payment failure...' : 'Processing cancellation...')
+
+    try {
+      // Log the error
+      if (errorDetails) {
+        await fetch('/api/payment-failure-log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: orderId,
+            error: errorDetails,
+            errorType: errorType,
+            timestamp: new Date().toISOString()
+          })
+        }).catch(console.error);
+      }
+
+      // Clear the cart
+      setErrorMessage('Clearing cart...')
+      clearCart()
+      await new Promise(resolve => setTimeout(resolve, 1000)) // Show clearing message
+
+      // Redirect to orders page
+      setErrorMessage('Redirecting...')
+      await new Promise(resolve => setTimeout(resolve, 500))
+      router.push(`/orders?status=${errorType}&orderId=${orderId}`)
+    } catch (error) {
+      console.error('Error during payment error handling:', error)
+      // Fallback redirect
+      router.push(`/orders?status=${errorType}&orderId=${orderId}`)
+    } finally {
+      setIsProcessingError(false)
+      setErrorMessage('')
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -292,6 +332,8 @@ export default function CheckoutPage() {
         modal: {
           ondismiss: function() {
             toast.error("Payment cancelled. Your order is saved and you can complete payment later.");
+            // Use professional error handling for payment cancellation
+            handlePaymentError(internalOrder.id, 'cancelled');
           }
         },
         prefill: {
@@ -322,16 +364,8 @@ export default function CheckoutPage() {
         console.error('Payment failed:', response.error);
         toast.error(`Payment failed: ${response.error.description}`);
         
-        // Log payment failure (optional - could call an endpoint to log)
-        fetch('/api/payment-failure-log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: internalOrder.id,
-            error: response.error,
-            timestamp: new Date().toISOString()
-          })
-        }).catch(console.error);
+        // Use professional error handling for payment failure
+        handlePaymentError(internalOrder.id, 'failed', response.error);
       });
 
       payment.open();
@@ -364,6 +398,19 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
+      {/* Professional Error Processing Overlay */}
+      {isProcessingError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-8 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <div className="flex flex-col items-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Processing...</h3>
+              <p className="text-sm text-gray-600 text-center">{errorMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>

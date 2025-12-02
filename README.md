@@ -1,318 +1,280 @@
-# HomeShoppie - E-Commerce Website
+# HomeShoppie 🏠🛒
 
-A complete e-commerce website built with Next.js 16+ for selling homemade products like ghee, mustard oil, traditional sweets, and pooja items.
+A full-featured e-commerce platform built with Next.js, featuring traditional homemade products like ghee, oils, sweets, namkeen, and pooja items.
 
-## 🚀 Features
+## 🚀 Quick Start
 
-### 🔐 Authentication
-- Login/Sign-up pages with NextAuth.js
-- JWT-based authentication
-- Role-based access (User/Admin)
-- Forgot password functionality
-- Demo accounts included
+### One-Command Setup
 
-### 🏠 Frontend Pages
-- Home page with hero carousel and categories
-- Category pages with product filtering
-- Product listing and details pages
-- Shopping cart with local storage
-- Checkout process with address management
-- User profile and order history
-- Admin dashboard (for admin users)
+For first-time setup, run our initialization script:
 
-### 🛒 Shopping Features
-- Add/remove items from cart
-- Update quantities
-- Cart persistence with Zustand
-- Order management system
-- Multiple payment options
-
-### 💳 Payments
-- Stripe payment integration ready
-- Razorpay integration for India
-- Cash on delivery option
-- Secure payment processing
-
-### 📦 Product Management
-- Category-based organization
-- Product search and filtering
-- Stock management
-- Image galleries
-- Rating and review system
-
-## 🛠️ Tech Stack
-
-- **Framework**: Next.js 16+ (App Router)
-- **Frontend**: React 19+, TailwindCSS
-- **Database**: MongoDB with Prisma ORM
-- **Authentication**: NextAuth.js
-- **State Management**: Zustand
-- **Payments**: Stripe, Razorpay
-- **UI Components**: Heroicons, React Hot Toast
-- **Animations**: Framer Motion
-
-## 📦 Installation & Setup
-
-### Prerequisites
-- Node.js 18+ installed
-- MongoDB database (local or cloud)
-- Git installed
-
-### 1. Clone Repository
 ```bash
-git clone <your-repo-url>
-cd homeshoppie
+npm run init
 ```
 
-### 2. Install Dependencies
-```bash
-pnpm install
-# or
-npm install
-```
+This will automatically:
+- ✅ Install all dependencies
+- ✅ Generate Prisma client
+- ✅ Create environment file template
+- ✅ Set up database schema
+- ✅ Seed sample data
+- ✅ Create necessary directories
 
-### 3. Environment Setup
-Copy `.env.local` and update with your values:
+### Manual Setup
+
+If you prefer manual setup or encounter issues:
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Environment Configuration**
+   ```bash
+   cp .env.example .env
+   ```
+   Configure your environment variables (see [Environment Variables](#environment-variables))
+
+3. **Database Setup**
+   ```bash
+   npx prisma generate
+   npx prisma db push
+   npx prisma db seed
+   ```
+
+4. **Start Development Server**
+   ```bash
+   npm run dev
+   ```
+
+## 📋 Prerequisites
+
+- **Node.js** (v18 or higher)
+- **npm** (v8 or higher)
+- **MongoDB** database (local or cloud)
+- **Razorpay** account (for payments)
+
+## 🔧 Environment Variables
+
+Create a `.env` file in the root directory:
 
 ```env
 # Database
 DATABASE_URL="mongodb://localhost:27017/homeshoppie"
+# Or for MongoDB Atlas:
+# DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/homeshoppie"
 
-# NextAuth
+# NextAuth.js
+NEXTAUTH_SECRET="your-super-secret-key-min-32-chars"
 NEXTAUTH_URL="http://localhost:3000"
-NEXTAUTH_SECRET="your-secret-key-here"
 
-# Stripe (for payments)
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_test_your_stripe_publishable_key"
-STRIPE_SECRET_KEY="sk_test_your_stripe_secret_key"
+# Razorpay Configuration (Get from Razorpay Dashboard)
+NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxx"
+RAZORPAY_KEY_SECRET="your_razorpay_secret"
 
-# Razorpay (Alternative for India)
-NEXT_PUBLIC_RAZORPAY_KEY_ID="your_razorpay_key_id"
-RAZORPAY_KEY_SECRET="your_razorpay_key_secret"
+# Base URL
+NEXT_PUBLIC_BASE_URL="http://localhost:3000"
+
+# Optional: For production deployment
+# VERCEL_URL="your-app.vercel.app"
 ```
 
-### 4. Database Setup
-```bash
-# Generate Prisma client
-pnpm db:generate
+### 🔑 Getting Razorpay Credentials
 
-# Push database schema
-pnpm db:push
+1. Sign up at [Razorpay Dashboard](https://dashboard.razorpay.com/)
+2. Go to Settings → API Keys
+3. Generate Test/Live keys
+4. Add them to your `.env` file
 
-# Seed database with sample data
-pnpm db:seed
-```
+## 📚 Available Scripts
 
-### 5. Start Development Server
-```bash
-pnpm dev
-```
+| Command | Description |
+|---------|-------------|
+| `npm run init` | 🚀 **One-time initialization script** |
+| `npm run dev` | Start development server |
+| `npm run build` | Build for production |
+| `npm run start` | Start production server |
+| `npm run db:seed` | Seed database with sample data |
+| `npm run db:generate` | Generate Prisma client |
+| `npm run db:push` | Push schema changes to database |
+| `npm test` | Run tests |
+| `npm run type-check` | TypeScript type checking |
 
-Visit `http://localhost:3000` to see your application.
+## 🛠️ Features
 
-## 🔑 Demo Accounts
+### 🛒 E-commerce Core
+- Product catalog with categories
+- Shopping cart with persistent storage
+- Wishlist functionality
+- User authentication & profiles
+- Order management system
+- Payment integration (Razorpay)
 
-### Customer Account
-- **Email**: customer@homeshoppie.com
-- **Password**: password123
+### 💳 Payment Features
+- **Professional Payment Flow**: Enhanced error handling with loading states
+- **Multiple Payment Methods**: Cards, UPI, Net Banking, Wallets
+- **Payment Failure Recovery**: Automatic cart clearing and proper redirect handling
+- **Order Tracking**: Users can track failed/cancelled payments
 
-### Admin Account
-- **Email**: admin@homeshoppie.com
-- **Password**: admin123
+### 🔐 Authentication
+- **Enhanced Login Experience**: Redirect URL support with user-friendly notifications
+- **Flexible Redirects**: Supports both `callbackUrl` and `redirect` parameters
+- **Session Management**: Automatic session sync after login
+- **Protected Routes**: Secure checkout and user pages
+
+### 🎨 UI/UX
+- Responsive design (Mobile-first)
+- Modern Tailwind CSS styling
+- Interactive components with Framer Motion
+- Toast notifications
+- Professional loading states
+- Error boundaries
+
+### 🗃️ Database & Backend
+- **MongoDB** with Prisma ORM
+- **Fixed Database Issues**: Proper foreign key constraint handling
+- **Reliable Seeding**: Error-free database initialization
+- RESTful API design
+- Input validation with Zod
+- Comprehensive error handling
 
 ## 📁 Project Structure
 
 ```
 homeshoppie/
 ├── src/
-│   ├── app/                    # Next.js App Router pages
-│   │   ├── auth/              # Authentication pages
-│   │   ├── cart/              # Shopping cart
-│   │   ├── api/               # API routes
-│   │   └── globals.css        # Global styles
-│   └── components/            # Reusable components
-├── lib/                       # Utility libraries
-├── store/                     # Zustand state management
-├── prisma/                    # Database schema and seed
-├── public/                    # Static assets
-└── README.md
+│   ├── app/                 # Next.js App Router
+│   │   ├── api/            # API routes
+│   │   ├── auth/           # Authentication pages
+│   │   ├── checkout/       # Checkout flow
+│   │   └── ...
+│   ├── components/         # React components
+│   ├── hooks/              # Custom hooks
+│   ├── lib/                # Utilities & configurations
+│   ├── store/              # Zustand state management
+│   └── types/              # TypeScript definitions
+├── prisma/                 # Database schema & migrations
+├── public/                 # Static assets
+├── init.js                 # 🚀 Initialization script
+└── package.json
 ```
-
-## 🎯 Sample Products
-
-The application comes with pre-seeded data including:
-
-### Ghee Products
-- Pure Cow Ghee (₹599)
-- Buffalo Ghee Bilona (₹799)
-- Mixed Ghee (₹699)
-
-### Oils
-- Cold-Pressed Mustard Oil (₹299)
-- Organic Sesame Oil (₹399)
-
-### Traditional Sweets
-- Traditional Thekua (₹199)
-- Gujiya/Karanji (₹299)
-- Kheer Mohan (₹249)
-
-### Namkeen
-- Mixed Namkeen (₹149)
-- Aloo Bhujia (₹129)
-- Masala Makhana (₹179)
-
-### Pooja Items
-- Brass Diya Set (₹399)
-- Camphor Tablets (₹89)
-- Kumkum Sindoor Pack (₹149)
 
 ## 🚀 Deployment
 
 ### Vercel (Recommended)
-1. Connect your repository to Vercel
-2. Add environment variables in Vercel dashboard
-3. Deploy automatically
+
+1. **Prepare for deployment:**
+   ```bash
+   npm run build
+   ```
+
+2. **Deploy to Vercel:**
+   ```bash
+   npx vercel
+   ```
+
+3. **Configure environment variables** in Vercel dashboard
+
+4. **Update environment variables:**
+   ```env
+   NEXT_PUBLIC_BASE_URL="https://your-app.vercel.app"
+   NEXTAUTH_URL="https://your-app.vercel.app"
+   ```
 
 ### Other Platforms
-- **Netlify**: Configure build settings
-- **Railway**: Connect MongoDB and deploy
-- **Heroku**: Add MongoDB addon
 
-## 🔧 Configuration
+The app is compatible with:
+- **Netlify**
+- **Railway**
+- **DigitalOcean App Platform**
+- **AWS Amplify**
 
-### Payment Setup
-
-#### Stripe
-1. Create Stripe account
-2. Get publishable and secret keys
-3. Update environment variables
-4. Test with Stripe test cards
-
-#### Razorpay (for India)
-1. Create Razorpay account
-2. Get API keys from dashboard
-3. Update environment variables
-4. Configure webhook endpoints
-
-### Database Options
-
-#### MongoDB Atlas (Cloud)
-```env
-DATABASE_URL="mongodb+srv://username:password@cluster.mongodb.net/homeshoppie"
-```
-
-#### Local MongoDB
-```env
-DATABASE_URL="mongodb://localhost:27017/homeshoppie"
-```
-
-## 📱 Mobile Responsive
-
-The application is fully responsive and works seamlessly on:
-- Desktop computers
-- Tablets
-- Mobile phones
-- All screen sizes
-
-## 🎨 Customization
-
-### Styling
-- Uses TailwindCSS for styling
-- Custom color scheme in `tailwind.config.js`
-- Component-based CSS classes in `globals.css`
-
-### Branding
-- Update logo and brand colors
-- Modify hero section content
-- Customize footer information
-
-## 🔐 Security Features
-
-- Password hashing with bcrypt
-- JWT token authentication
-- CSRF protection
-- Input validation
-- Secure payment processing
-
-## 📊 Performance
-
-- Server-side rendering with Next.js
-- Image optimization
-- Code splitting
-- Lazy loading
-- Caching strategies
-
-## 🐛 Troubleshooting
+## 🔧 Troubleshooting
 
 ### Common Issues
 
-**Database Connection**
+**Database Connection Failed**
 ```bash
-# Check MongoDB is running
-mongosh
+# Check your DATABASE_URL in .env
+# For local MongoDB:
+DATABASE_URL="mongodb://localhost:27017/homeshoppie"
 
-# Regenerate Prisma client
-pnpm db:generate
+# Restart MongoDB service if needed
 ```
 
-**Authentication Issues**
-```bash
-# Clear browser cookies and localStorage
-# Verify NEXTAUTH_SECRET is set
-# Check database user records
-```
+**Payment Integration Issues**
+- Verify Razorpay credentials in `.env`
+- Check if you're using test/live keys appropriately
+- Ensure webhook URLs are configured in Razorpay dashboard
 
-**Build Errors**
+**Build/Runtime Errors**
 ```bash
 # Clear Next.js cache
-rm -rf .next
+npm run cleanup
 
-# Reinstall dependencies
-rm -rf node_modules pnpm-lock.yaml
-pnpm install
+# Regenerate Prisma client
+npm run db:generate
+
+# Check TypeScript errors
+npm run type-check
+```
+
+**Home Page URL Error**
+- Fixed in latest version with proper URL fallback logic
+- Ensure `NEXT_PUBLIC_BASE_URL` is set correctly
+
+## 🧪 Testing
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create feature branch
-3. Make changes
-4. Test thoroughly
-5. Submit pull request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## 📧 Support
+
+If you encounter any issues:
+
+1. **Run the initialization script**: `npm run init`
+2. **Check the troubleshooting section** above
+3. **Review environment variables** configuration
+4. **Check database connection** and credentials
+
+## 🎉 What's New
+
+### Latest Updates
+- ✅ **Professional Payment Error Handling**: Enhanced UX with loading states and proper redirects
+- ✅ **Enhanced Login Flow**: Redirect URL support with user notifications  
+- ✅ **Database Fixes**: Resolved seed errors and foreign key constraints
+- ✅ **URL Resolution**: Fixed home page undefined URL errors
+- ✅ **One-Command Setup**: Complete initialization script for easy deployment
+
+### Recent Features
+- Professional payment failure recovery flow
+- Enhanced login redirect functionality
+- Reliable database seeding
+- Environment-aware URL construction
+- Comprehensive error handling
 
 ## 📄 License
 
-This project is licensed under the MIT License.
-
-## 📞 Support
-
-For support and questions:
-- Email: info@homeshoppie.com
-- Phone: +91 98765 43210
-
-## 🙏 Acknowledgments
-
-- Next.js team for the amazing framework
-- Prisma for database management
-- TailwindCSS for styling system
-- NextAuth.js for authentication
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-**Happy Shopping with HomeShoppie! 🛒**
+**Built with ❤️ using Next.js, MongoDB, and modern web technologies**
 
-
-
-
-
-To Run Local:
-
-    net stop MongoDB
-
-    mongod --dbpath "C:/data/db" --replSet rs0
-
-    winget install MongoDB.Shell
-
-    mongosh:
-
-        rs.initiate()
+🚀 **Get started in seconds with `npm run init`**

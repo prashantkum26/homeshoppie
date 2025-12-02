@@ -141,30 +141,32 @@ async function handlePaymentSuccess(paymentEntity: any) {
       return;
     }
 
-    // Check if this razorpayPaymentId already exists in another record
-    const existingPaymentWithId = await prisma.paymentLog.findFirst({
-      where: {
-        razorpayPaymentId: paymentId,
-        id: { not: paymentLog.id }
-      }
-    });
-
-    if (existingPaymentWithId) {
-      console.warn('RazorpayPaymentId already exists in another record:', paymentId);
-      // Log the duplicate attempt but don't throw error
-      await logSecurityEvent({
-        action: 'API_ACCESS',
-        ipAddress: 'webhook',
-        severity: 'MEDIUM',
-        details: {
-          endpoint: '/api/razorpay/webhook',
-          action: 'duplicate_payment_id_detected',
-          payment_id: paymentId,
-          existing_log_id: existingPaymentWithId.id,
-          current_log_id: paymentLog.id
+    // Enhanced duplicate checking for razorpayPaymentId
+    if (paymentId) {
+      const existingPaymentWithId = await prisma.paymentLog.findFirst({
+        where: {
+          razorpayPaymentId: paymentId,
+          id: { not: paymentLog.id }
         }
       });
-      return;
+
+      if (existingPaymentWithId) {
+        console.warn('RazorpayPaymentId already exists in another record:', paymentId);
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: 'HIGH',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'duplicate_payment_id_blocked',
+            payment_id: paymentId,
+            existing_log_id: existingPaymentWithId.id,
+            current_log_id: paymentLog.id,
+            reason: 'Payment ID uniqueness violation prevented'
+          }
+        });
+        return; // Block duplicate payment processing
+      }
     }
 
     // Map Razorpay method to our internal method

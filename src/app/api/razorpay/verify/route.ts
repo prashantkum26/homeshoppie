@@ -122,34 +122,37 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Check if this razorpayPaymentId already exists in another record
-    const existingPaymentWithId = await prisma.paymentLog.findFirst({
-      where: {
-        razorpayPaymentId: razorpay_payment_id,
-        id: { not: paymentLog.id }
-      }
-    });
-
-    if (existingPaymentWithId) {
-      console.warn('RazorpayPaymentId already exists in another record:', razorpay_payment_id);
-      await logSecurityEvent({
-        userId: session.user.id,
-        action: 'SUSPICIOUS_ACTIVITY',
-        ipAddress,
-        severity: 'HIGH',
-        details: { 
-          endpoint: '/api/razorpay/verify', 
-          reason: 'Payment ID already exists in another record',
-          razorpay_payment_id,
-          existing_log_id: existingPaymentWithId.id,
-          current_log_id: paymentLog.id
+    // Enhanced programmatic duplicate checking for razorpayPaymentId
+    if (razorpay_payment_id) {
+      const existingPaymentWithId = await prisma.paymentLog.findFirst({
+        where: {
+          razorpayPaymentId: razorpay_payment_id,
+          id: { not: paymentLog.id }
         }
       });
-      
-      return NextResponse.json(
-        { success: false, error: 'Payment ID already processed' },
-        { status: 400 }
-      );
+
+      if (existingPaymentWithId) {
+        console.warn('RazorpayPaymentId already exists - blocking duplicate:', razorpay_payment_id);
+        await logSecurityEvent({
+          userId: session.user.id,
+          action: 'SUSPICIOUS_ACTIVITY',
+          ipAddress,
+          severity: 'CRITICAL',
+          details: { 
+            endpoint: '/api/razorpay/verify', 
+            reason: 'Payment ID uniqueness violation blocked',
+            razorpay_payment_id,
+            existing_log_id: existingPaymentWithId.id,
+            current_log_id: paymentLog.id,
+            action_taken: 'Payment verification rejected'
+          }
+        });
+        
+        return NextResponse.json(
+          { success: false, error: 'Payment ID already processed - potential fraud attempt blocked' },
+          { status: 400 }
+        );
+      }
     }
 
     // Verify order belongs to authenticated user

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn, getSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -20,7 +20,15 @@ export default function SignInPage() {
   })
   const [showPassword, setShowPassword] = useState<boolean>(false)
   const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [redirectUrl, setRedirectUrl] = useState<string>('/')
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    // Get redirect URL from query parameters
+    const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('redirect') || '/'
+    setRedirectUrl(decodeURIComponent(callbackUrl))
+  }, [searchParams])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -57,13 +65,10 @@ export default function SignInPage() {
         }
         
         // Redirect based on user role or return URL
-        const urlParams = new URLSearchParams(window.location.search)
-        const returnUrl = urlParams.get('callbackUrl') || '/'
-        
         if (session?.user?.role === 'ADMIN') {
           router.push('/admin')
         } else {
-          router.push(returnUrl)
+          router.push(redirectUrl)
         }
       }
     } catch (error) {
@@ -89,6 +94,15 @@ export default function SignInPage() {
               create a new account
             </Link>
           </p>
+          {redirectUrl !== '/' && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <span className="font-medium">After signing in, you'll be redirected to:</span>
+                <br />
+                <span className="text-xs text-blue-600 break-all">{redirectUrl}</span>
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
