@@ -36,9 +36,12 @@ export default function WishlistPage() {
     if (session?.user) {
       fetchFromServer()
     }
-    // Always show local items (for guests or merged items)
+  }, [session?.user]) // Only depend on user session, not the function itself
+
+  // Separate useEffect for updating local items
+  useEffect(() => {
     setLocalItems(items)
-  }, [session, items, fetchFromServer])
+  }, [items])
 
   const handleRemoveFromWishlist = (productId: string) => {
     removeFromWishlist(productId)

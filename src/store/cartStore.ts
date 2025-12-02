@@ -44,42 +44,52 @@ const useCartStore = create<CartStore>()(
           })
         }
 
-        // Auto-save to server
+        // Auto-save to server only if user is authenticated
         try {
-          const response = await fetch('/api/cart', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              productId: product.id,
-              quantity: 1,
-            }),
-          })
-
-          if (!response.ok) {
-            const error = await response.json()
-            // Revert optimistic update on error
-            if (existingItem) {
-              set({
-                items: items.map(item =>
-                  item.id === product.id
-                    ? { ...item, quantity: item.quantity }
-                    : item
-                )
-              })
-            } else {
-              set({
-                items: items.filter(item => item.id !== product.id)
-              })
-            }
+          // Check if user is authenticated
+          const authCheckResponse = await fetch('/api/auth/session')
+          
+          if (authCheckResponse.ok) {
+            const session = await authCheckResponse.json()
             
-            if (response.status !== 401) {
-              toast.error(error.error || 'Failed to add item to cart')
+            if (session?.user) {
+              // User is authenticated, sync with server
+              const response = await fetch('/api/cart', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  productId: product.id,
+                  quantity: 1,
+                }),
+              })
+
+              if (!response.ok) {
+                const error = await response.json()
+                // Revert optimistic update on error
+                if (existingItem) {
+                  set({
+                    items: items.map(item =>
+                      item.id === product.id
+                        ? { ...item, quantity: item.quantity }
+                        : item
+                    )
+                  })
+                } else {
+                  set({
+                    items: items.filter(item => item.id !== product.id)
+                  })
+                }
+                
+                toast.error(error.error || 'Failed to add item to cart')
+              }
             }
+            // If user is not authenticated, just keep local changes
           }
         } catch (error) {
           console.error('Error syncing cart with server:', error)
+          // For unauthenticated users, don't revert - keep local changes
         }
       },
       
@@ -92,25 +102,35 @@ const useCartStore = create<CartStore>()(
           items: items.filter(item => item.id !== productId)
         })
 
-        // Auto-save to server
+        // Auto-save to server only if user is authenticated
         try {
-          const cartItem = originalItems.find(item => item.id === productId)
-          if (cartItem) {
-            const response = await fetch(`/api/cart/${cartItem.id}`, {
-              method: 'DELETE',
-            })
+          // Check if user is authenticated
+          const authCheckResponse = await fetch('/api/auth/session')
+          
+          if (authCheckResponse.ok) {
+            const session = await authCheckResponse.json()
+            
+            if (session?.user) {
+              // User is authenticated, try to sync with server
+              const cartItem = originalItems.find(item => item.id === productId)
+              if (cartItem) {
+                const response = await fetch(`/api/cart/${cartItem.id}`, {
+                  method: 'DELETE',
+                })
 
-            if (!response.ok && response.status !== 401) {
-              // Revert on error (except auth errors)
-              set({ items: originalItems })
-              const error = await response.json()
-              toast.error(error.error || 'Failed to remove item from cart')
+                if (!response.ok) {
+                  // Revert on error
+                  set({ items: originalItems })
+                  const error = await response.json()
+                  toast.error(error.error || 'Failed to remove item from cart')
+                }
+              }
             }
+            // If user is not authenticated, just keep local changes
           }
         } catch (error) {
           console.error('Error syncing cart with server:', error)
-          // Revert on network error
-          set({ items: originalItems })
+          // For unauthenticated users, don't revert - keep local changes
         }
       },
       
@@ -132,29 +152,40 @@ const useCartStore = create<CartStore>()(
           )
         })
 
-        // Auto-save to server
+        // Auto-save to server only if user is authenticated
         try {
-          const cartItem = items.find(item => item.id === productId)
-          if (cartItem) {
-            const response = await fetch(`/api/cart/${cartItem.id}`, {
-              method: 'PATCH',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({ quantity }),
-            })
+          // Check if user is authenticated by making a simple request first
+          const authCheckResponse = await fetch('/api/auth/session')
+          
+          if (authCheckResponse.ok) {
+            const session = await authCheckResponse.json()
+            
+            if (session?.user) {
+              // User is authenticated, try to sync with server
+              const cartItem = items.find(item => item.id === productId)
+              if (cartItem) {
+                const response = await fetch(`/api/cart/${cartItem.id}`, {
+                  method: 'PATCH',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ quantity }),
+                })
 
-            if (!response.ok && response.status !== 401) {
-              // Revert on error (except auth errors)
-              set({ items: originalItems })
-              const error = await response.json()
-              toast.error(error.error || 'Failed to update cart')
+                if (!response.ok && response.status !== 401) {
+                  // Revert on error (except auth errors)
+                  set({ items: originalItems })
+                  const error = await response.json()
+                  toast.error(error.error || 'Failed to update cart')
+                }
+              }
             }
+            // If user is not authenticated, just keep local changes without API call
           }
         } catch (error) {
           console.error('Error syncing cart with server:', error)
-          // Revert on network error
-          set({ items: originalItems })
+          // For unauthenticated users, don't revert - keep local changes
+          // Only revert if we know the user was authenticated and the API call failed
         }
       },
       
@@ -164,22 +195,32 @@ const useCartStore = create<CartStore>()(
         // Optimistic update
         set({ items: [] })
 
-        // Auto-save to server
+        // Auto-save to server only if user is authenticated
         try {
-          const response = await fetch('/api/cart', {
-            method: 'DELETE',
-          })
+          // Check if user is authenticated
+          const authCheckResponse = await fetch('/api/auth/session')
+          
+          if (authCheckResponse.ok) {
+            const session = await authCheckResponse.json()
+            
+            if (session?.user) {
+              // User is authenticated, sync with server
+              const response = await fetch('/api/cart', {
+                method: 'DELETE',
+              })
 
-          if (!response.ok && response.status !== 401) {
-            // Revert on error (except auth errors)
-            set({ items: originalItems })
-            const error = await response.json()
-            toast.error(error.error || 'Failed to clear cart')
+              if (!response.ok) {
+                // Revert on error
+                set({ items: originalItems })
+                const error = await response.json()
+                toast.error(error.error || 'Failed to clear cart')
+              }
+            }
+            // If user is not authenticated, just keep local changes
           }
         } catch (error) {
           console.error('Error syncing cart with server:', error)
-          // Revert on network error
-          set({ items: originalItems })
+          // For unauthenticated users, don't revert - keep local changes
         }
       },
 
