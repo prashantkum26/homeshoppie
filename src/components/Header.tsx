@@ -63,6 +63,38 @@ export default function Header() {
     }
   }, [cartStore, wishlistStore])
 
+  // Handle clicks outside user menu to close it
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element
+      if (userMenuOpen && !target.closest('.user-menu-container')) {
+        setUserMenuOpen(false)
+      }
+    }
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [userMenuOpen])
+
+  // Handle escape key to close menus
+  useEffect(() => {
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setUserMenuOpen(false)
+        setMobileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [])
+
   return (
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <nav className="container-custom">
@@ -126,7 +158,7 @@ export default function Header() {
             </Link>
 
             {/* User Menu */}
-            <div className="relative">
+            <div className="relative user-menu-container">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"

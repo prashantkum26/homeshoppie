@@ -29,14 +29,31 @@ interface UserProfile {
   image: string | null
 }
 
+interface Address {
+  id: string
+  name: string
+  phone: string
+  street1: string
+  street2?: string
+  city: string
+  state: string
+  postalCode: string
+  landmark?: string
+  type: 'HOME' | 'WORK' | 'OTHER'
+  isDefault: boolean
+}
+
 export default function Dashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [activeTab, setActiveTab] = useState('overview')
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [orders, setOrders] = useState<Order[]>([])
+  const [addresses, setAddresses] = useState<Address[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [showAddressForm, setShowAddressForm] = useState(false)
+  const [editingAddress, setEditingAddress] = useState<Address | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -50,10 +67,11 @@ export default function Dashboard() {
       if (!isMounted || status !== 'authenticated' || !session?.user) return
       
       try {
-        // Fetch both profile and orders concurrently to reduce calls
-        const [profileRes, ordersRes] = await Promise.all([
+        // Fetch profile, orders, and addresses concurrently to reduce calls
+        const [profileRes, ordersRes, addressesRes] = await Promise.all([
           fetch('/api/user/profile'),
-          fetch('/api/user/orders')
+          fetch('/api/user/orders'),
+          fetch('/api/user/addresses')
         ])
         
         if (!isMounted) return // Check if component is still mounted
@@ -66,6 +84,11 @@ export default function Dashboard() {
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json()
           if (isMounted) setOrders(ordersData)
+        }
+
+        if (addressesRes.ok) {
+          const addressesData = await addressesRes.json()
+          if (isMounted) setAddresses(addressesData)
         }
       } catch (error) {
         console.error('Error fetching user data:', error)
@@ -377,21 +400,339 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-medium text-gray-900">Saved Addresses</h2>
-                  <button className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                  <button 
+                    onClick={() => {
+                      setEditingAddress(null)
+                      setShowAddressForm(true)
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+                  >
                     Add New Address
                   </button>
                 </div>
                 
-                <div className="text-center py-12">
-                  <div className="w-24 h-24 mx-auto mb-6 text-gray-300">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
+                {addresses.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-24 h-24 mx-auto mb-6 text-gray-300">
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                    </div>
+                    <h3 className="text-xl font-medium text-gray-900 mb-2">No addresses saved</h3>
+                    <p className="text-gray-600">Add an address to make checkout faster.</p>
                   </div>
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">No addresses saved</h3>
-                  <p className="text-gray-600">Add an address to make checkout faster.</p>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {addresses.map((address) => (
+                      <div key={address.id} className="border border-gray-200 rounded-lg p-6 relative">
+                        {address.isDefault && (
+                          <div className="absolute top-4 right-4">
+                            <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
+                              Default
+                            </span>
+                          </div>
+                        )}
+                        
+                        <div className="mb-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-lg font-medium text-gray-900">{address.name}</h3>
+                            <span className="text-xs px-2 py-1 bg-gray-100 text-gray-700 rounded-full">
+                              {address.type}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-1">{address.phone}</p>
+                        </div>
+                        
+                        <div className="text-sm text-gray-700 mb-4">
+                          <p>{address.street1}</p>
+                          {address.street2 && <p>{address.street2}</p>}
+                          {address.landmark && <p>Near {address.landmark}</p>}
+                          <p>{address.city}, {address.state} - {address.postalCode}</p>
+                        </div>
+                        
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={() => {
+                              setEditingAddress(address)
+                              setShowAddressForm(true)
+                            }}
+                            className="text-sm text-green-600 hover:text-green-700 font-medium"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={async () => {
+                              if (confirm('Are you sure you want to delete this address?')) {
+                                try {
+                                  const response = await fetch(`/api/user/addresses/${address.id}`, {
+                                    method: 'DELETE'
+                                  })
+                                  if (response.ok) {
+                                    setAddresses(addresses.filter(a => a.id !== address.id))
+                                    toast.success('Address deleted successfully')
+                                  } else {
+                                    toast.error('Failed to delete address')
+                                  }
+                                } catch (error) {
+                                  toast.error('Failed to delete address')
+                                }
+                              }
+                            }}
+                            className="text-sm text-red-600 hover:text-red-700 font-medium"
+                          >
+                            Delete
+                          </button>
+                          {!address.isDefault && (
+                            <button
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/user/addresses/${address.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ isDefault: true })
+                                  })
+                                  if (response.ok) {
+                                    setAddresses(addresses.map(a => ({
+                                      ...a,
+                                      isDefault: a.id === address.id
+                                    })))
+                                    toast.success('Default address updated')
+                                  } else {
+                                    toast.error('Failed to update default address')
+                                  }
+                                } catch (error) {
+                                  toast.error('Failed to update default address')
+                                }
+                              }}
+                              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                            >
+                              Set as Default
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Address Form Modal/Panel */}
+                {showAddressForm && (
+                  <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-screen overflow-y-auto">
+                      <div className="px-6 py-4 border-b border-gray-200">
+                        <h3 className="text-lg font-medium text-gray-900">
+                          {editingAddress ? 'Edit Address' : 'Add New Address'}
+                        </h3>
+                      </div>
+
+                      <form onSubmit={async (e) => {
+                        e.preventDefault()
+                        const formData = new FormData(e.currentTarget)
+                        const addressData = {
+                          name: formData.get('name'),
+                          phone: formData.get('phone'),
+                          street1: formData.get('street1'),
+                          street2: formData.get('street2'),
+                          city: formData.get('city'),
+                          state: formData.get('state'),
+                          postalCode: formData.get('postalCode'),
+                          landmark: formData.get('landmark'),
+                          type: formData.get('type'),
+                          isDefault: formData.get('isDefault') === 'on'
+                        }
+
+                        try {
+                          const url = editingAddress 
+                            ? `/api/user/addresses/${editingAddress.id}`
+                            : '/api/user/addresses'
+                          
+                          const response = await fetch(url, {
+                            method: editingAddress ? 'PATCH' : 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(addressData)
+                          })
+
+                          if (response.ok) {
+                            const savedAddress = await response.json()
+                            
+                            if (editingAddress) {
+                              setAddresses(addresses.map(a => 
+                                a.id === editingAddress.id ? savedAddress : a
+                              ))
+                              toast.success('Address updated successfully')
+                            } else {
+                              setAddresses([...addresses, savedAddress])
+                              toast.success('Address added successfully')
+                            }
+                            
+                            setShowAddressForm(false)
+                            setEditingAddress(null)
+                          } else {
+                            const error = await response.json()
+                            toast.error(error.error || 'Failed to save address')
+                          }
+                        } catch (error) {
+                          toast.error('Failed to save address')
+                        }
+                      }}>
+                        <div className="px-6 py-4 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Full Name *
+                              </label>
+                              <input
+                                type="text"
+                                name="name"
+                                defaultValue={editingAddress?.name || ''}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Phone Number *
+                              </label>
+                              <input
+                                type="tel"
+                                name="phone"
+                                defaultValue={editingAddress?.phone || ''}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Address Line 1 *
+                            </label>
+                            <input
+                              type="text"
+                              name="street1"
+                              defaultValue={editingAddress?.street1 || ''}
+                              required
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Address Line 2
+                            </label>
+                            <input
+                              type="text"
+                              name="street2"
+                              defaultValue={editingAddress?.street2 || ''}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                City *
+                              </label>
+                              <input
+                                type="text"
+                                name="city"
+                                defaultValue={editingAddress?.city || ''}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                State *
+                              </label>
+                              <input
+                                type="text"
+                                name="state"
+                                defaultValue={editingAddress?.state || ''}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Postal Code *
+                              </label>
+                              <input
+                                type="text"
+                                name="postalCode"
+                                defaultValue={editingAddress?.postalCode || ''}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Type *
+                              </label>
+                              <select
+                                name="type"
+                                defaultValue={editingAddress?.type || 'HOME'}
+                                required
+                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                              >
+                                <option value="HOME">Home</option>
+                                <option value="WORK">Work</option>
+                                <option value="OTHER">Other</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Landmark
+                            </label>
+                            <input
+                              type="text"
+                              name="landmark"
+                              defaultValue={editingAddress?.landmark || ''}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                            />
+                          </div>
+
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              name="isDefault"
+                              defaultChecked={editingAddress?.isDefault || false}
+                              className="h-4 w-4 text-green-600 border-gray-300 rounded"
+                            />
+                            <label className="ml-2 text-sm text-gray-700">
+                              Set as default address
+                            </label>
+                          </div>
+                        </div>
+
+                        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowAddressForm(false)
+                              setEditingAddress(null)
+                            }}
+                            className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            type="submit"
+                            className="px-4 py-2 bg-green-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700"
+                          >
+                            {editingAddress ? 'Update Address' : 'Add Address'}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
