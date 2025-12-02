@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  reactStrictMode: false, // Disable to prevent duplicate API calls in development
   reactCompiler: true,
   
   // Image configuration

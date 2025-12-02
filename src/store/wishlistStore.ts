@@ -100,28 +100,6 @@ const useWishlistStore = create<WishlistStore>()(
           const response = await fetch('/api/user/wishlist')
           if (response.ok) {
             const serverItems = await response.json()
-            const { items: localItems } = get()
-            
-            // If there are local items but server is empty/different, sync local to server
-            if (localItems.length > 0) {
-              const syncResponse = await fetch('/api/user/wishlist/sync', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ items: localItems }),
-              })
-              
-              if (syncResponse.ok) {
-                const syncData = await syncResponse.json()
-                if (syncData.success && syncData.wishlist) {
-                  set({ items: syncData.wishlist })
-                  return
-                }
-              }
-            }
-            
-            // If no local items or sync failed, use server items
             set({ items: serverItems })
           } else if (response.status === 401) {
             // User not authenticated, keep local items
