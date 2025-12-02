@@ -1,4 +1,4 @@
-// Enterprise-Grade Prisma Schema - MongoDB Compatible
+// Enterprise-Grade Prisma Schema - Comprehensive Improvements
 // Addresses: Security, Performance, Consistency, Best Practices
 
 generator client {
@@ -74,6 +74,7 @@ model User {
   updatedProducts    Product[] @relation("ProductUpdatedBy")
 
   // Indexes for Performance
+  @@index([email])
   @@index([phone])
   @@index([isActive])
   @@index([role])
@@ -259,9 +260,10 @@ model Category {
 
   // Relations
   products   Product[]
-  parent     Category? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  parent     Category? @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children   Category[] @relation("CategoryHierarchy")
 
+  @@index([slug])
   @@index([parentId])
   @@index([isActive, isVisible])
   @@index([sortOrder])
@@ -275,10 +277,10 @@ model Product {
   description   String
   shortDescription String?
   
-  // Pricing - Using Float with precision handling for MongoDB
-  price         Float     // Store as paise/cents for precision
-  compareAtPrice Float?   @map("compare_at_price") 
-  cost          Float?    // Cost basis for margin calculation
+  // Pricing - Using Decimal for precision
+  price         Decimal   @db.Decimal
+  compareAtPrice Decimal? @map("compare_at_price") @db.Decimal
+  cost          Decimal?  @db.Decimal  // Cost basis for margin calculation
   
   // Product Organization
   sku           String?   @unique
@@ -293,7 +295,7 @@ model Product {
   allowBackorder Boolean  @default(false)
   
   // Physical Properties
-  weight        Float?    // Store in grams
+  weight        Decimal?  @db.Decimal
   weightUnit    WeightUnit @default(GRAMS)
   dimensions    Json?     // {length, width, height, unit}
   
@@ -340,6 +342,8 @@ model Product {
 
   // Performance Indexes
   @@index([categoryId])
+  @@index([slug])
+  @@index([sku])
   @@index([isActive, isVisible])
   @@index([isFeatured])
   @@index([status])
@@ -354,8 +358,8 @@ model Product {
 model ProductPriceHistory {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   productId String   @db.ObjectId
-  oldPrice  Float    // Store as paise/cents for precision
-  newPrice  Float    // Store as paise/cents for precision
+  oldPrice  Decimal  @db.Decimal
+  newPrice  Decimal  @db.Decimal
   reason    String?  // "promotion", "cost_change", "market_adjustment"
   changedBy String   @db.ObjectId
   createdAt DateTime @default(now())
@@ -403,12 +407,12 @@ model Image {
   filename         String
   originalName     String
   mimeType         String
-  fileSize         String   @map("file_size") // Using String for large file sizes
+  fileSize         BigInt   @map("file_size") // Using BigInt for large files
   
   // Image Dimensions
   width            Int?
   height           Int?
-  aspectRatio      Float?   // Simple float ratio
+  aspectRatio      Decimal? @db.Decimal
   
   // SEO & Accessibility
   alt              String?
@@ -454,6 +458,7 @@ model Image {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  @@index([serviceImageId])
   @@index([productId])
   @@index([uploadedBy])
   @@index([isPublic, accessLevel])
@@ -519,7 +524,7 @@ model CartItem {
   quantity   Int      @default(1)
   
   // Price at time of adding (for reference)
-  priceSnapshot Float? // Store as paise/cents for precision
+  priceSnapshot Decimal? @db.Decimal
   
   // Session & Tracking
   sessionId  String?
@@ -608,16 +613,16 @@ model Order {
   paymentStatus   PaymentStatus @default(PENDING)
   paymentIntentId String?
   
-  // Financial Calculations - Store as paise/cents for precision
-  subtotalAmount  Float     // Store as paise/cents
-  taxAmount       Float     @default(0) // Store as paise/cents
-  shippingFee     Float     @default(0) // Store as paise/cents
-  discountAmount  Float     @default(0) // Store as paise/cents
-  totalAmount     Float     // Store as paise/cents
+  // Financial Calculations - Using Decimal for precision
+  subtotalAmount  Decimal     @db.Decimal
+  taxAmount       Decimal     @default(0) @db.Decimal
+  shippingFee     Decimal     @default(0) @db.Decimal
+  discountAmount  Decimal     @default(0) @db.Decimal
+  totalAmount     Decimal     @db.Decimal
   
   // Tax Details
   taxBreakdown    Json?       // Detailed tax calculation
-  taxRate         Float?      // Tax rate as percentage
+  taxRate         Decimal?    @db.Decimal
   
   // Shipping & Delivery
   shippingMethod  String?
@@ -653,6 +658,7 @@ model Order {
 
   // Performance Indexes
   @@index([userId, createdAt])
+  @@index([orderNumber])
   @@index([status])
   @@index([paymentStatus])
   @@index([createdAt])
@@ -670,8 +676,8 @@ model OrderItem {
   name        String
   sku         String?
   quantity    Int
-  unitPrice   Float   // Store as paise/cents for precision
-  totalPrice  Float   // Store as paise/cents for precision
+  unitPrice   Decimal @db.Decimal
+  totalPrice  Decimal @db.Decimal
   
   // Product Snapshot
   productSnapshot Json? // Full product details at order time
@@ -717,8 +723,8 @@ model PaymentLog {
   razorpayPaymentId String?
   signature         String?       // @encrypt - Payment signature
   
-  // Payment Details - Store as paise/cents for precision
-  amount            Float         // Store as paise/cents
+  // Payment Details - Using Decimal for precision
+  amount            Decimal       @db.Decimal
   currency          String        @default("INR")
   
   // Payment Processing
@@ -768,16 +774,16 @@ model TaxConfiguration {
   id            String      @id @default(auto()) @map("_id") @db.ObjectId
   name          String      @unique
   type          TaxType
-  rate          Float       // Store as percentage (e.g., 18.0 for 18%)
+  rate          Decimal     @db.Decimal  // More precise than Float
   
   // Applicability Rules
   isActive      Boolean     @default(true)
   applicableIn  String[]    // States/regions
   productTypes  String[]    // Product categories
   
-  // Amount Thresholds - Store as paise/cents for precision
-  minAmount     Float?      
-  maxAmount     Float?      
+  // Amount Thresholds
+  minAmount     Decimal?    @db.Decimal
+  maxAmount     Decimal?    @db.Decimal
   
   // Validity Period
   validFrom     DateTime    @default(now())

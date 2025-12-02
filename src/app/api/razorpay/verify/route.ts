@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Find payment log entry
+    // Find payment log entry - get the latest attempt for this order
     const paymentLog = await prisma.paymentLog.findFirst({
       where: {
         razorpayOrderId: razorpay_order_id
@@ -88,6 +88,9 @@ export async function POST(req: NextRequest) {
             totalAmount: true
           }
         }
+      },
+      orderBy: {
+        createdAt: 'desc' // Get the latest attempt by creation time
       }
     });
 
@@ -132,7 +135,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingPaymentWithId) {
-        console.warn('RazorpayPaymentId already exists - blocking duplicate:', razorpay_payment_id);
+        console.warn('RazorpayPaymentId already processed - blocking duplicate:', razorpay_payment_id);
         await logSecurityEvent({
           userId: session.user.id,
           action: 'SUSPICIOUS_ACTIVITY',
@@ -140,7 +143,7 @@ export async function POST(req: NextRequest) {
           severity: 'CRITICAL',
           details: { 
             endpoint: '/api/razorpay/verify', 
-            reason: 'Payment ID uniqueness violation blocked',
+            reason: 'Payment ID already processed - duplicate transaction blocked',
             razorpay_payment_id,
             existing_log_id: existingPaymentWithId.id,
             current_log_id: paymentLog.id,
@@ -149,7 +152,7 @@ export async function POST(req: NextRequest) {
         });
         
         return NextResponse.json(
-          { success: false, error: 'Payment ID already processed - potential fraud attempt blocked' },
+          { success: false, error: 'Payment already processed - duplicate transaction blocked' },
           { status: 400 }
         );
       }
@@ -174,6 +177,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized access' },
         { status: 403 }
+      );
+    }
+
+    // SECURITY: Check if order is already in PAID status (double payment prevention)
+    const currentOrderStatus = await prisma.order.findUnique({
+      where: { id: paymentLog.order.id },
+      select: { paymentStatus: true, status: true }
+    });
+
+    if (currentOrderStatus?.paymentStatus === 'PAID') {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'HIGH',
+        details: { 
+          endpoint: '/api/razorpay/verify', 
+          reason: 'Attempted payment verification on already paid order',
+          razorpay_order_id,
+          razorpay_payment_id,
+          order_id: paymentLog.order.id,
+          action_taken: 'Payment verification blocked'
+        },
+        blocked: true
+      });
+      
+      return NextResponse.json(
+        { success: false, error: 'Order has already been paid' },
+        { status: 400 }
       );
     }
 
@@ -272,6 +304,11 @@ export async function POST(req: NextRequest) {
               paymentIntentId: razorpay_payment_id,
               updatedAt: new Date()
             }
+          });
+
+          // Clear user's cart after successful payment
+          await tx.cartItem.deleteMany({
+            where: { userId: session.user.id }
           });
         });
       });

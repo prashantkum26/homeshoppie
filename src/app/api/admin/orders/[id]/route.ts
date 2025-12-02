@@ -182,14 +182,7 @@ export async function PATCH(
             email: true
           }
         },
-        orderItems: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            price: true
-          }
-        }
+        orderItems: true
       }
     })
 

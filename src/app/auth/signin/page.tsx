@@ -25,9 +25,38 @@ export default function SignInPage() {
   const searchParams = useSearchParams()
 
   useEffect(() => {
-    // Get redirect URL from query parameters
-    const callbackUrl = searchParams.get('callbackUrl') || searchParams.get('redirect') || '/'
-    setRedirectUrl(decodeURIComponent(callbackUrl))
+    // Enhanced redirect URL handling with validation
+    const callbackUrl = searchParams.get('callbackUrl') || 
+                       searchParams.get('redirect') || 
+                       searchParams.get('returnTo') || 
+                       searchParams.get('next') || '/'
+    
+    // Decode and validate the redirect URL
+    let decodedUrl = decodeURIComponent(callbackUrl)
+    
+    // Security check: ensure redirect URL is safe (same origin or relative)
+    if (decodedUrl.startsWith('http://') || decodedUrl.startsWith('https://')) {
+      try {
+        const url = new URL(decodedUrl)
+        const currentOrigin = window.location.origin
+        
+        // Only allow redirects to same origin
+        if (url.origin !== currentOrigin) {
+          console.warn('External redirect blocked for security:', decodedUrl)
+          decodedUrl = '/' // Fallback to home
+        }
+      } catch (error) {
+        console.warn('Invalid redirect URL:', decodedUrl)
+        decodedUrl = '/' // Fallback to home
+      }
+    }
+    
+    // Ensure URL starts with / for relative paths
+    if (!decodedUrl.startsWith('/') && !decodedUrl.startsWith('http')) {
+      decodedUrl = '/' + decodedUrl
+    }
+    
+    setRedirectUrl(decodedUrl)
   }, [searchParams])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {

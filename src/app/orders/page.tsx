@@ -27,7 +27,8 @@ interface Order {
     id: string
     name: string
     quantity: number
-    price: number
+    unitPrice: number
+    totalPrice: number
   }>
   address: {
     name: string
@@ -303,7 +304,7 @@ export default function OrdersPage() {
                             <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                           </div>
                           <p className="text-sm font-medium text-gray-900">
-                            ₹{(item.price * item.quantity).toFixed(2)}
+                            ₹{item.totalPrice.toFixed(2)}
                           </p>
                         </div>
                       ))}
@@ -335,12 +336,18 @@ export default function OrdersPage() {
                             <p className="mt-1 text-sm text-red-700">
                               Your payment could not be processed. Please try placing the order again.
                             </p>
-                            <div className="mt-3">
+                            <div className="mt-3 space-y-2">
+                              <Link
+                                href={`/orders/${order.id}?action=retry`}
+                                className="inline-block text-sm font-medium text-red-800 hover:text-red-900 mr-4"
+                              >
+                                View Details & Retry →
+                              </Link>
                               <Link
                                 href="/cart"
-                                className="text-sm font-medium text-red-800 hover:text-red-900"
+                                className="inline-block text-sm font-medium text-gray-600 hover:text-gray-800"
                               >
-                                Retry Payment →
+                                Start New Order
                               </Link>
                             </div>
                           </div>

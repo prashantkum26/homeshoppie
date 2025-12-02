@@ -18,23 +18,8 @@ export async function GET(request: NextRequest) {
     const orders = await prisma.order.findMany({
       where: { userId: session.user.id },
       include: {
-        orderItems: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            price: true,
-          }
-        },
-        address: {
-          select: {
-            name: true,
-            street: true,
-            city: true,
-            state: true,
-            pincode: true,
-          }
-        }
+        orderItems: true,
+        address: true
       },
       orderBy: { id: 'desc' }
     })
@@ -189,23 +174,29 @@ export async function POST(request: NextRequest) {
           totalAmount: totalAmount,
           subtotalAmount: subtotal,
           taxAmount: taxCalculation.totalTaxAmount,
-          taxBreakdown: taxCalculation.taxBreakdown,
+          taxBreakdown: JSON.stringify(taxCalculation.taxBreakdown),
           shippingFee: shippingFee,
-          notes: notes || null,
-          orderItems: {
-            create: validatedItems.map((item) => ({
-              productId: item.id,
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price
-            }))
-          }
+          notes: notes || null
         },
         include: {
           orderItems: true,
           address: true
         }
       })
+
+      // Create order items separately with required fields
+      for (const item of validatedItems) {
+        await tx.orderItem.create({
+          data: {
+            orderId: newOrder.id,
+            productId: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            unitPrice: item.price,
+            totalPrice: item.price * item.quantity
+          }
+        })
+      }
 
       // Update product stock
       for (const item of validatedItems) {

@@ -25,24 +25,8 @@ export async function GET(
         userId: session.user.id
       },
       include: {
-        orderItems: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            price: true,
-          }
-        },
-        address: {
-          select: {
-            name: true,
-            phone: true,
-            street: true,
-            city: true,
-            state: true,
-            pincode: true,
-          }
-        },
+        orderItems: true,
+        address: true,
         paymentLogs: {
           select: {
             id: true,

@@ -13,10 +13,11 @@ interface Address {
   id?: string
   name: string
   phone: string
-  street: string
+  street1: string
+  street2?: string
   city: string
   state: string
-  pincode: string
+  postalCode: string
   landmark?: string
   type: string
 }
@@ -41,20 +42,22 @@ export default function CheckoutPage() {
     shippingAddress: {
       name: '',
       phone: '',
-      street: '',
+      street1: '',
+      street2: '',
       city: '',
       state: '',
-      pincode: '',
+      postalCode: '',
       landmark: '',
       type: 'HOME'
     },
     billingAddress: {
       name: '',
       phone: '',
-      street: '',
+      street1: '',
+      street2: '',
       city: '',
       state: '',
-      pincode: '',
+      postalCode: '',
       landmark: '',
       type: 'HOME'
     },
@@ -87,9 +90,21 @@ export default function CheckoutPage() {
 
         // If user has saved addresses, use the first one as default
         if (addresses.length > 0) {
+          const address = addresses[0]
           setFormData(prev => ({
             ...prev,
-            shippingAddress: addresses[0]
+            shippingAddress: {
+              id: address.id,
+              name: address.name || '',
+              phone: address.phone || '',
+              street1: address.street1 || '',
+              street2: address.street2 || '',
+              city: address.city || '',
+              state: address.state || '',
+              postalCode: address.postalCode || '',
+              landmark: address.landmark || '',
+              type: address.type || 'HOME'
+            }
           }))
         }
       }
@@ -115,10 +130,11 @@ export default function CheckoutPage() {
       billingAddress: checked ? prev.shippingAddress : {
         name: '',
         phone: '',
-        street: '',
+        street1: '',
+        street2: '',
         city: '',
         state: '',
-        pincode: '',
+        postalCode: '',
         landmark: '',
         type: 'HOME'
       }
@@ -128,7 +144,18 @@ export default function CheckoutPage() {
   const selectSavedAddress = (address: Address, type: 'shippingAddress' | 'billingAddress') => {
     setFormData(prev => ({
       ...prev,
-      [type]: address
+      [type]: {
+        id: address.id,
+        name: address.name || '',
+        phone: address.phone || '',
+        street1: address.street1 || '',
+        street2: address.street2 || '',
+        city: address.city || '',
+        state: address.state || '',
+        postalCode: address.postalCode || '',
+        landmark: address.landmark || '',
+        type: address.type || 'HOME'
+      }
     }))
   }
 
@@ -136,16 +163,16 @@ export default function CheckoutPage() {
     const { shippingAddress, billingAddress, sameAsShipping } = formData
 
     // Validate shipping address
-    if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.street ||
-      !shippingAddress.city || !shippingAddress.state || !shippingAddress.pincode) {
+    if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.street1 ||
+      !shippingAddress.city || !shippingAddress.state || !shippingAddress.postalCode) {
       toast.error('Please fill in all required shipping address fields')
       return false
     }
 
     // Validate billing address if different from shipping
     if (!sameAsShipping) {
-      if (!billingAddress.name || !billingAddress.phone || !billingAddress.street ||
-        !billingAddress.city || !billingAddress.state || !billingAddress.pincode) {
+      if (!billingAddress.name || !billingAddress.phone || !billingAddress.street1 ||
+        !billingAddress.city || !billingAddress.state || !billingAddress.postalCode) {
         toast.error('Please fill in all required billing address fields')
         return false
       }
@@ -159,7 +186,7 @@ export default function CheckoutPage() {
     setErrorMessage(errorType === 'failed' ? 'Processing payment failure...' : 'Processing cancellation...')
 
     try {
-      // Log the error
+      // Log the error with enhanced security logging
       if (errorDetails) {
         await fetch('/api/payment-failure-log', {
           method: 'POST',
@@ -168,24 +195,60 @@ export default function CheckoutPage() {
             orderId: orderId,
             error: errorDetails,
             errorType: errorType,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            userAgent: navigator.userAgent,
+            url: window.location.href
           })
         }).catch(console.error);
       }
 
-      // Clear the cart
-      setErrorMessage('Clearing cart...')
-      clearCart()
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Show clearing message
+      // Update order status in database
+      setErrorMessage('Updating order status...')
+      await fetch(`/api/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentStatus: errorType === 'failed' ? 'FAILED' : 'CANCELLED',
+          status: 'PENDING',
+          notes: `Payment ${errorType} at ${new Date().toISOString()}`
+        })
+      }).catch(console.error);
 
-      // Redirect to orders page
+      // Don't clear cart for failed payments - user might retry
+      if (errorType === 'cancelled') {
+        setErrorMessage('Clearing cart...')
+        clearCart()
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+
+      // Redirect based on error type with enhanced parameters
       setErrorMessage('Redirecting...')
       await new Promise(resolve => setTimeout(resolve, 500))
-      router.push(`/orders?status=${errorType}&orderId=${orderId}`)
+      
+      // Enhanced redirect URLs based on context
+      if (errorType === 'failed') {
+        // For payment failures, redirect to orders with retry option
+        router.push(`/orders/${orderId}?status=failed&action=retry&from=checkout`)
+      } else {
+        // For cancellations, redirect to orders page with status
+        router.push(`/orders?status=cancelled&orderId=${orderId}&from=checkout`)
+      }
     } catch (error) {
       console.error('Error during payment error handling:', error)
-      // Fallback redirect
-      router.push(`/orders?status=${errorType}&orderId=${orderId}`)
+      // Comprehensive fallback redirects
+      const fallbackParams = new URLSearchParams({
+        status: errorType,
+        orderId: orderId,
+        from: 'checkout',
+        error: 'processing_failed'
+      })
+      
+      // Try multiple fallback routes
+      try {
+        router.push(`/orders/${orderId}?${fallbackParams.toString()}`)
+      } catch {
+        router.push(`/orders?${fallbackParams.toString()}`)
+      }
     } finally {
       setIsProcessingError(false)
       setErrorMessage('')
@@ -318,8 +381,7 @@ export default function CheckoutPage() {
             const verified = await verifyRes.json();
 
             if (verified.success) {
-              clearCart();
-              toast.success("Payment successful! Redirecting...");
+              // Only clear cart and redirect after successful verification
               router.push(`/order-success?orderId=${verified.order_id}&orderNumber=${verified.order_number}`);
             } else {
               toast.error("Payment verification failed. Please contact support if amount was deducted.");
@@ -436,8 +498,8 @@ export default function CheckoutPage() {
                           className="text-left p-3 border border-gray-200 rounded-md hover:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500"
                         >
                           <div className="text-sm font-medium">{address.name}</div>
-                          <div className="text-sm text-gray-600">{address.street}, {address.city}</div>
-                          <div className="text-sm text-gray-600">{address.state} - {address.pincode}</div>
+                          <div className="text-sm text-gray-600">{address.street1}{address.street2 ? `, ${address.street2}` : ''}, {address.city}</div>
+                          <div className="text-sm text-gray-600">{address.state} - {address.postalCode}</div>
                         </button>
                       ))}
                     </div>
@@ -469,13 +531,25 @@ export default function CheckoutPage() {
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">Street Address *</label>
+                    <label className="block text-sm font-medium text-gray-700">Street Address Line 1 *</label>
                     <input
                       type="text"
                       required
-                      value={formData.shippingAddress.street}
-                      onChange={(e) => handleAddressChange('shippingAddress', 'street', e.target.value)}
+                      value={formData.shippingAddress.street1}
+                      onChange={(e) => handleAddressChange('shippingAddress', 'street1', e.target.value)}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      placeholder="House number, building, apartment"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700">Street Address Line 2 (Optional)</label>
+                    <input
+                      type="text"
+                      value={formData.shippingAddress.street2}
+                      onChange={(e) => handleAddressChange('shippingAddress', 'street2', e.target.value)}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                      placeholder="Area, locality, or additional info"
                     />
                   </div>
 
@@ -502,12 +576,12 @@ export default function CheckoutPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">PIN Code *</label>
+                    <label className="block text-sm font-medium text-gray-700">Postal Code *</label>
                     <input
                       type="text"
                       required
-                      value={formData.shippingAddress.pincode}
-                      onChange={(e) => handleAddressChange('shippingAddress', 'pincode', e.target.value)}
+                      value={formData.shippingAddress.postalCode}
+                      onChange={(e) => handleAddressChange('shippingAddress', 'postalCode', e.target.value)}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                     />
                   </div>
@@ -564,13 +638,25 @@ export default function CheckoutPage() {
                     </div>
 
                     <div className="sm:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700">Street Address *</label>
+                      <label className="block text-sm font-medium text-gray-700">Street Address Line 1 *</label>
                       <input
                         type="text"
                         required
-                        value={formData.billingAddress.street}
-                        onChange={(e) => handleAddressChange('billingAddress', 'street', e.target.value)}
+                        value={formData.billingAddress.street1}
+                        onChange={(e) => handleAddressChange('billingAddress', 'street1', e.target.value)}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="House number, building, apartment"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700">Street Address Line 2 (Optional)</label>
+                      <input
+                        type="text"
+                        value={formData.billingAddress.street2}
+                        onChange={(e) => handleAddressChange('billingAddress', 'street2', e.target.value)}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
+                        placeholder="Area, locality, or additional info"
                       />
                     </div>
 
@@ -597,12 +683,12 @@ export default function CheckoutPage() {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">PIN Code *</label>
+                      <label className="block text-sm font-medium text-gray-700">Postal Code *</label>
                       <input
                         type="text"
                         required
-                        value={formData.billingAddress.pincode}
-                        onChange={(e) => handleAddressChange('billingAddress', 'pincode', e.target.value)}
+                        value={formData.billingAddress.postalCode}
+                        onChange={(e) => handleAddressChange('billingAddress', 'postalCode', e.target.value)}
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-green-500 focus:border-green-500"
                       />
                     </div>

@@ -42,39 +42,39 @@ const products = [
     name: 'Pure Cow Ghee',
     description: 'Made from fresh cow milk using traditional bilona method. Rich in vitamins A, D, E, and K. Perfect for cooking, frying, and Ayurvedic remedies.',
     price: 599,
-    compareAt: 699,
+    compareAtPrice: 699,
     images: ['/images/cow-ghee-1.jpg', '/images/cow-ghee-2.jpg'],
     categoryName: 'Ghee',
     stock: 50,
     slug: 'pure-cow-ghee',
     weight: 500,
-    unit: 'g',
+    weightUnit: 'GRAMS',
     tags: ['Organic', 'Traditional', 'A2 Milk', 'Bilona Method']
   },
   {
     name: 'Buffalo Ghee (Bilona)',
     description: 'Premium buffalo ghee made using ancient bilona method. Higher nutritional value with rich taste and aroma. Ideal for traditional cooking.',
     price: 799,
-    compareAt: 899,
+    compareAtPrice: 899,
     images: ['/images/buffalo-ghee-1.jpg', '/images/buffalo-ghee-2.jpg'],
     categoryName: 'Ghee',
     stock: 30,
     slug: 'buffalo-ghee-bilona',
     weight: 500,
-    unit: 'g',
+    weightUnit: 'GRAMS',
     tags: ['Premium', 'Bilona Method', 'High Fat Content', 'Traditional']
   },
   {
     name: 'Mixed Ghee (Cow + Buffalo)',
     description: 'Perfect blend of cow and buffalo ghee combining the best of both. Balanced taste and nutrition for everyday cooking needs.',
     price: 699,
-    compareAt: 799,
+    compareAtPrice: 799,
     images: ['/images/mixed-ghee-1.jpg', '/images/mixed-ghee-2.jpg'],
     categoryName: 'Ghee',
     stock: 40,
     slug: 'mixed-ghee-cow-buffalo',
     weight: 500,
-    unit: 'g',
+    weightUnit: 'GRAMS',
     tags: ['Blended', 'Nutritious', 'Daily Use', 'Economic']
   },
 
@@ -268,13 +268,14 @@ async function main() {
   await prisma.user.deleteMany()
 
   // Create users
-  console.log('� Creating users...')
+  console.log('👤 Creating users...')
   for (const userData of users) {
     const hashedPassword = await bcrypt.hash(userData.password, 12)
+    const { password, ...userDataWithoutPassword } = userData
     await prisma.user.create({
       data: {
-        ...userData,
-        password: hashedPassword
+        ...userDataWithoutPassword,
+        passwordHash: hashedPassword
       }
     })
   }

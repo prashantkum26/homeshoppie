@@ -43,20 +43,7 @@ export async function GET(request: NextRequest) {
             pincode: true
           }
         },
-        orderItems: {
-          select: {
-            id: true,
-            name: true,
-            quantity: true,
-            price: true,
-            product: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        },
+        orderItems: true,
         paymentLogs: {
           select: {
             id: true,

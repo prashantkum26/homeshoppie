@@ -34,7 +34,8 @@ interface OrderDetail {
     id: string
     name: string
     quantity: number
-    price: number
+    unitPrice: number
+    totalPrice: number
     productId: string
   }>
   address: {
@@ -346,13 +347,13 @@ export default function OrderDetailsPage() {
                       <div className="flex-1">
                         <h3 className="text-sm font-medium text-gray-900">{item.name}</h3>
                         <p className="text-sm text-gray-500">Quantity: {item.quantity}</p>
-                        <p className="text-sm text-gray-500">Price: ₹{item.price.toFixed(2)} each</p>
+                        <p className="text-sm text-gray-500">Price: ₹{item.unitPrice.toFixed(2)} each</p>
                       </div>
                     </div>
                     
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-900">
-                        ₹{(item.price * item.quantity).toFixed(2)}
+                        ₹{item.totalPrice.toFixed(2)}
                       </p>
                     </div>
                   </div>
