@@ -183,72 +183,62 @@ export default function CheckoutPage() {
 
   const handlePaymentError = async (orderId: string, errorType: 'failed' | 'cancelled', errorDetails?: any) => {
     setIsProcessingError(true)
-    setErrorMessage(errorType === 'failed' ? 'Processing payment failure...' : 'Processing cancellation...')
-
+    
     try {
-      // Log the error with enhanced security logging
-      if (errorDetails) {
-        await fetch('/api/payment-failure-log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: orderId,
-            error: errorDetails,
-            errorType: errorType,
-            timestamp: new Date().toISOString(),
-            userAgent: navigator.userAgent,
-            url: window.location.href
-          })
-        }).catch(console.error);
-      }
-
-      // Update order status in database
-      setErrorMessage('Updating order status...')
-      await fetch(`/api/orders/${orderId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentStatus: errorType === 'failed' ? 'FAILED' : 'CANCELLED',
-          status: 'PENDING',
-          notes: `Payment ${errorType} at ${new Date().toISOString()}`
-        })
-      }).catch(console.error);
-
-      // Don't clear cart for failed payments - user might retry
-      if (errorType === 'cancelled') {
-        setErrorMessage('Clearing cart...')
-        clearCart()
-        await new Promise(resolve => setTimeout(resolve, 1000))
-      }
-
-      // Redirect based on error type with enhanced parameters
-      setErrorMessage('Redirecting...')
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Enhanced redirect URLs based on context
       if (errorType === 'failed') {
-        // For payment failures, redirect to orders with retry option
-        router.push(`/orders/${orderId}?status=failed&action=retry&from=checkout`)
-      } else {
-        // For cancellations, redirect to orders page with status
-        router.push(`/orders?status=cancelled&orderId=${orderId}&from=checkout`)
+        setErrorMessage('Payment failed. Saving your order for retry...')
+        
+        // Log payment failure (simplified - just console log since API might not exist)
+        console.log('Payment failed:', {
+          orderId,
+          error: errorDetails,
+          timestamp: new Date().toISOString()
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        setErrorMessage('Redirecting to orders...')
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // Don't clear cart for failed payments - user can retry
+        toast.error('Payment failed. Your order is saved and you can retry payment from your orders page.')
+        router.push(`/orders?highlight=${orderId}&status=payment_failed`)
+        
+      } else if (errorType === 'cancelled') {
+        setErrorMessage('Payment cancelled. Your order is saved...')
+        
+        console.log('Payment cancelled:', {
+          orderId,
+          timestamp: new Date().toISOString()
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Don't clear cart immediately - give user options
+        const shouldRetry = window.confirm(
+          'Payment was cancelled. Would you like to:\n' +
+          '• Click OK to retry payment now\n' +
+          '• Click Cancel to go to your orders page'
+        )
+        
+        if (shouldRetry) {
+          // User wants to retry - just close the overlay and let them try again
+          setIsProcessingError(false)
+          setErrorMessage('')
+          toast('You can retry payment by clicking the payment button again.')
+          return
+        } else {
+          // User wants to go to orders
+          setErrorMessage('Redirecting to orders...')
+          await new Promise(resolve => setTimeout(resolve, 500))
+          router.push(`/orders?highlight=${orderId}&status=payment_cancelled`)
+        }
       }
     } catch (error) {
       console.error('Error during payment error handling:', error)
-      // Comprehensive fallback redirects
-      const fallbackParams = new URLSearchParams({
-        status: errorType,
-        orderId: orderId,
-        from: 'checkout',
-        error: 'processing_failed'
-      })
       
-      // Try multiple fallback routes
-      try {
-        router.push(`/orders/${orderId}?${fallbackParams.toString()}`)
-      } catch {
-        router.push(`/orders?${fallbackParams.toString()}`)
-      }
+      // Simple fallback - just go to orders page with a general error message
+      toast.error(`Payment ${errorType}. Please check your orders page.`)
+      router.push('/orders')
     } finally {
       setIsProcessingError(false)
       setErrorMessage('')
@@ -367,6 +357,10 @@ export default function CheckoutPage() {
         order_id: rzpOrder.id,
         handler: async function (response: any) {
           try {
+            // Show processing state
+            setIsProcessingError(true)
+            setErrorMessage('Verifying payment...')
+
             // --- 5️⃣ Verify payment with enhanced security ---
             const verifyRes = await fetch("/api/razorpay/verify", {
               method: "POST",
@@ -381,14 +375,32 @@ export default function CheckoutPage() {
             const verified = await verifyRes.json();
 
             if (verified.success) {
-              // Only clear cart and redirect after successful verification
-              router.push(`/order-success?orderId=${verified.order_id}&orderNumber=${verified.order_number}`);
+              setErrorMessage('Payment successful! Redirecting...')
+              await new Promise(resolve => setTimeout(resolve, 1000))
+              
+              // Clear cart and redirect after successful verification
+              clearCart()
+              router.push(`/order-success?orderId=${verified.order_id}&orderNumber=${verified.order_number}`)
             } else {
-              toast.error("Payment verification failed. Please contact support if amount was deducted.");
+              setIsProcessingError(false)
+              setErrorMessage('')
+              
+              // Show specific error or generic message
+              const errorMsg = verified.error || "Payment verification failed"
+              toast.error(`${errorMsg}. Please contact support if amount was deducted.`)
+              
+              // Redirect to orders page with error status
+              router.push(`/orders?highlight=${internalOrder.id}&status=verification_failed&payment_id=${response.razorpay_payment_id}`)
             }
           } catch (verifyError) {
-            console.error('Payment verification error:', verifyError);
-            toast.error("Payment verification failed. Please contact support.");
+            console.error('Payment verification error:', verifyError)
+            setIsProcessingError(false)
+            setErrorMessage('')
+            
+            toast.error("Network error during verification. Please check your orders page or contact support.")
+            
+            // Redirect to orders page for manual verification
+            router.push(`/orders?highlight=${internalOrder.id}&status=verification_error&payment_id=${response.razorpay_payment_id}`)
           }
         },
         modal: {

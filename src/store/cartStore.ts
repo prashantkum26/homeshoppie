@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 
 interface CartItem extends Product {
   quantity: number
+  cartItemId?: string // Database cart item ID for API calls
 }
 
 interface CartStore {
@@ -113,8 +114,8 @@ const useCartStore = create<CartStore>()(
             if (session?.user) {
               // User is authenticated, try to sync with server
               const cartItem = originalItems.find(item => item.id === productId)
-              if (cartItem) {
-                const response = await fetch(`/api/cart/${cartItem.id}`, {
+              if (cartItem && cartItem.cartItemId) {
+                const response = await fetch(`/api/cart/${cartItem.cartItemId}`, {
                   method: 'DELETE',
                 })
 
@@ -163,8 +164,8 @@ const useCartStore = create<CartStore>()(
             if (session?.user) {
               // User is authenticated, try to sync with server
               const cartItem = items.find(item => item.id === productId)
-              if (cartItem) {
-                const response = await fetch(`/api/cart/${cartItem.id}`, {
+              if (cartItem && cartItem.cartItemId) {
+                const response = await fetch(`/api/cart/${cartItem.cartItemId}`, {
                   method: 'PATCH',
                   headers: {
                     'Content-Type': 'application/json',
@@ -236,7 +237,8 @@ const useCartStore = create<CartStore>()(
             // Transform server cart items to match our store format
             const transformedItems = serverCartItems.map((item: any) => ({
               ...item.product,
-              quantity: item.quantity
+              quantity: item.quantity,
+              cartItemId: item.id // Store the cart item database ID
             }))
             
             set({ items: transformedItems })
