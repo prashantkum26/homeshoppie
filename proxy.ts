@@ -56,7 +56,8 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
   return response
 }
 
-export async function middleware(request: NextRequest) {
+// Next.js 16+ proxy function - lightweight request boundary
+export default async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   
   // Create response with security headers
@@ -111,7 +112,7 @@ export async function middleware(request: NextRequest) {
         }
       }
     } catch (error) {
-      console.error('Middleware verification check error:', error)
+      console.error('Proxy verification check error:', error)
       // On error, allow the request to proceed to avoid breaking the app
     }
   }
@@ -119,7 +120,7 @@ export async function middleware(request: NextRequest) {
   return response
 }
 
-// Configure which paths the middleware runs on
+// Configure which paths the proxy runs on - Next.js 16+ format
 export const config = {
   matcher: [
     // Match all routes except static files and images
