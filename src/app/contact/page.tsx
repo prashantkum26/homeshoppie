@@ -10,6 +10,9 @@ import {
   CheckCircleIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
+import Input from '@/components/ui/Input'
+import Textarea from '@/components/ui/Textarea'
+import Button from '@/components/ui/Button'
 
 interface ContactForm {
   name: string
@@ -17,6 +20,7 @@ interface ContactForm {
   phone: string
   subject: string
   message: string
+  category: string
 }
 
 export default function ContactPage() {
@@ -25,11 +29,13 @@ export default function ContactPage() {
     email: '',
     phone: '',
     subject: '',
-    message: ''
+    message: '',
+    category: 'GENERAL'
   })
   
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target
@@ -37,33 +43,76 @@ export default function ContactPage() {
       ...prev,
       [name]: value
     }))
+    
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }))
+    }
+  }
+
+  const validateForm = (): boolean => {
+    const newErrors: Record<string, string> = {}
+    
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required'
+    }
+    
+    if (!formData.email.trim()) {
+      newErrors.email = 'Email is required'
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+      newErrors.email = 'Please enter a valid email address'
+    }
+    
+    if (!formData.subject.trim()) {
+      newErrors.subject = 'Subject is required'
+    }
+    
+    if (!formData.message.trim()) {
+      newErrors.message = 'Message is required'
+    } else if (formData.message.length < 10) {
+      newErrors.message = 'Message must be at least 10 characters'
+    }
+    
+    if (formData.phone && !/^[\+]?[91]?[0-9]{10}$/.test(formData.phone.replace(/\s|-/g, ''))) {
+      newErrors.phone = 'Please enter a valid phone number'
+    }
+    
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Basic validation
-    if (!formData.name || !formData.email || !formData.message) {
-      toast.error('Please fill in all required fields')
-      return
-    }
-
-    // Email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(formData.email)) {
-      toast.error('Please enter a valid email address')
+    if (!validateForm()) {
+      toast.error('Please fix the errors below')
       return
     }
 
     setIsSubmitting(true)
 
     try {
-      // Here you would typically send the form data to your backend
-      // For now, we'll simulate a successful submission
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          toast.error(result.message || 'Too many messages sent. Please try again later.')
+        } else {
+          toast.error(result.message || 'Failed to send message')
+        }
+        return
+      }
+
       setSubmitted(true)
-      toast.success('Thank you for your message! We\'ll get back to you soon.')
+      toast.success(result.message || 'Message sent successfully!')
       
       // Reset form
       setFormData({
@@ -71,7 +120,8 @@ export default function ContactPage() {
         email: '',
         phone: '',
         subject: '',
-        message: ''
+        message: '',
+        category: 'GENERAL'
       })
     } catch (error) {
       console.error('Error submitting contact form:', error)
@@ -169,106 +219,109 @@ export default function ContactPage() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Enter your full name"
-                  />
-                </div>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  label="Full Name"
+                  placeholder="Enter your full name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  error={errors.name}
+                  required
+                  fullWidth
+                />
                 
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                    Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Enter your email"
-                  />
-                </div>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  label="Email Address"
+                  placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  error={errors.email}
+                  required
+                  fullWidth
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number
-                  </label>
-                  <input
-                    type="tel"
-                    id="phone"
-                    name="phone"
-                    value={formData.phone}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    placeholder="Enter your phone number"
-                  />
-                </div>
+                <Input
+                  id="phone"
+                  name="phone"
+                  type="tel"
+                  label="Phone Number"
+                  placeholder="Enter your phone number"
+                  value={formData.phone}
+                  onChange={handleInputChange}
+                  error={errors.phone}
+                  helperText="Optional - for faster response"
+                  fullWidth
+                />
                 
-                <div>
-                  <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-                    Subject
+                <div className="space-y-1">
+                  <label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                    Category
                   </label>
                   <select
-                    id="subject"
-                    name="subject"
-                    value={formData.subject}
+                    id="category"
+                    name="category"
+                    value={formData.category}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
                   >
-                    <option value="">Select a subject</option>
-                    {subjects.map((subject) => (
-                      <option key={subject} value={subject}>
-                        {subject}
-                      </option>
-                    ))}
+                    <option value="GENERAL">General Inquiry</option>
+                    <option value="PRODUCT_INQUIRY">Product Question</option>
+                    <option value="ORDER_SUPPORT">Order Support</option>
+                    <option value="TECHNICAL_ISSUE">Technical Issue</option>
+                    <option value="BILLING">Billing</option>
+                    <option value="PARTNERSHIP">Partnership</option>
+                    <option value="FEEDBACK">Feedback</option>
+                    <option value="COMPLAINT">Complaint</option>
+                    <option value="BULK_ORDER">Bulk Orders</option>
+                    <option value="OTHER">Other</option>
                   </select>
                 </div>
               </div>
 
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium text-gray-700 mb-2">
-                  Message *
-                </label>
-                <textarea
-                  id="message"
-                  name="message"
-                  rows={6}
-                  value={formData.message}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-                  placeholder="Tell us how we can help you..."
-                />
-              </div>
+              <Input
+                id="subject"
+                name="subject"
+                type="text"
+                label="Subject"
+                placeholder="Brief description of your inquiry"
+                value={formData.subject}
+                onChange={handleInputChange}
+                error={errors.subject}
+                required
+                fullWidth
+              />
 
-              <button
+              <Textarea
+                id="message"
+                name="message"
+                label="Message"
+                placeholder="Tell us how we can help you..."
+                rows={6}
+                value={formData.message}
+                onChange={handleInputChange}
+                error={errors.message}
+                helperText={`${formData.message.length}/2000 characters`}
+                required
+                fullWidth
+                resize="none"
+              />
+
+              <Button
                 type="submit"
+                loading={isSubmitting}
                 disabled={isSubmitting}
-                className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                fullWidth
+                size="lg"
               >
-                {isSubmitting ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Sending Message...
-                  </div>
-                ) : (
-                  'Send Message'
-                )}
-              </button>
+                Send Message
+              </Button>
 
               <p className="text-sm text-gray-500">
                 * Required fields. We'll respond within 24 hours during business days.

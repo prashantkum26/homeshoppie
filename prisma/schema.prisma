@@ -72,6 +72,8 @@ model User {
   userActivityLogs   UserActivityLog[]
   createdProducts    Product[] @relation("ProductCreatedBy")
   updatedProducts    Product[] @relation("ProductUpdatedBy")
+  contactMessages    ContactMessage[]
+  visitorLogs        VisitorLog[]
 
   // Indexes for Performance
   @@index([phone])
@@ -930,4 +932,125 @@ enum InventoryMovement {
   TRANSFER
   DAMAGED
   EXPIRED
+}
+
+// ============================================================================
+// CONTACT & COMMUNICATIONS
+// ============================================================================
+
+model ContactMessage {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  
+  // Contact Information
+  name        String
+  email       String
+  phone       String?
+  subject     String
+  message     String
+  
+  // Message Classification
+  category    ContactCategory @default(GENERAL)
+  priority    ContactPriority @default(NORMAL)
+  status      ContactStatus   @default(NEW)
+  
+  // IP & Session Tracking
+  ipAddress   String
+  userAgent   String?
+  sessionId   String?
+  
+  // Rate Limiting & Security
+  dailyCount  Int       @default(1) // Number of messages sent today from this IP
+  
+  // Message Processing
+  assignedTo  String?   @db.ObjectId
+  resolvedAt  DateTime?
+  resolvedBy  String?   @db.ObjectId
+  notes       String?   // Internal notes from staff
+  
+  // User Association (optional - for logged in users)
+  userId      String?   @db.ObjectId
+  user        User?     @relation(fields: [userId], references: [id])
+  
+  // Audit Trail
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  @@index([ipAddress, createdAt])
+  @@index([email, createdAt])
+  @@index([status])
+  @@index([category])
+  @@index([priority])
+  @@index([createdAt])
+  
+  @@map("contact_messages")
+}
+
+model VisitorLog {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  
+  // Visitor Identification
+  ipAddress   String
+  userAgent   String?
+  fingerprint String?  // Browser fingerprint
+  sessionId   String?
+  
+  // Visit Information
+  visitDate   DateTime @default(now())
+  pageUrl     String
+  referrer    String?
+  
+  // Geographic Data (optional)
+  country     String?
+  city        String?
+  region      String?
+  
+  // Visit Tracking
+  isUnique    Boolean  @default(true) // First visit of the day
+  visitCount  Int      @default(1)   // Total visits for this visitor
+  
+  // User Association (if logged in)
+  userId      String?  @db.ObjectId
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  createdAt   DateTime @default(now())
+  
+  @@unique([ipAddress, visitDate]) // One unique visit per IP per day
+  @@index([ipAddress, createdAt])
+  @@index([isUnique, createdAt])
+  @@index([pageUrl, createdAt])
+  
+  @@map("visitor_logs")
+}
+
+// ============================================================================
+// CONTACT ENUMS
+// ============================================================================
+
+enum ContactCategory {
+  GENERAL
+  PRODUCT_INQUIRY
+  ORDER_SUPPORT
+  TECHNICAL_ISSUE
+  BILLING
+  PARTNERSHIP
+  FEEDBACK
+  COMPLAINT
+  BULK_ORDER
+  OTHER
+}
+
+enum ContactPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ContactStatus {
+  NEW
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  RESOLVED
+  CLOSED
+  SPAM
 }
