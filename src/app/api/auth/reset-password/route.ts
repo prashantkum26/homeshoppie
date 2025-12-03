@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 
 const prisma = new PrismaClient()
@@ -181,15 +182,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Hash the new password
-    const saltRounds = 12
-    const hashedPassword = await bcrypt.hash(password, saltRounds)
+    // Generate new salt for password reset (security best practice)
+    const newPasswordSalt = crypto.randomBytes(32).toString('hex')
+    
+    // Combine password with new salt before hashing
+    const saltedPassword = password + newPasswordSalt
+    const hashedPassword = await bcrypt.hash(saltedPassword, 12)
 
     // Update user password and related fields
     await prisma.user.update({
       where: { id: user.id },
       data: {
         passwordHash: hashedPassword,
+        passwordSalt: newPasswordSalt, // Store new salt
         passwordChangedAt: new Date(),
         failedLoginCount: 0, // Reset failed login count
         isLocked: false, // Unlock account if it was locked

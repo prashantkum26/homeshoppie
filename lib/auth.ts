@@ -37,6 +37,18 @@ export const authOptions = {
         const user = await prisma.user.findUnique({
           where: {
             email: credentials.email as string
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            role: true,
+            passwordHash: true,
+            passwordSalt: true,
+            isActive: true,
+            isLocked: true,
+            lockUntil: true,
+            failedLoginCount: true
           }
         })
 
@@ -44,10 +56,31 @@ export const authOptions = {
           return null
         }
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password as string,
-          user.passwordHash
-        )
+        // Check if account is active
+        if (user.isActive === false) {
+          console.log('Account is inactive:', credentials.email)
+          return null
+        }
+
+        // Check if account is locked
+        if (user.isLocked && user.lockUntil && user.lockUntil > new Date()) {
+          console.log('Account is locked until:', user.lockUntil)
+          return null
+        }
+
+        let isPasswordValid = false
+
+        // Use explicit salt if available, otherwise fallback to bcrypt's built-in salt
+        if (user.passwordSalt) {
+          // New method: explicit salt
+          const saltedPassword = (credentials.password as string) + user.passwordSalt
+          isPasswordValid = await bcrypt.compare(saltedPassword, user.passwordHash)
+          console.log('Using explicit salt for authentication:', credentials.email)
+        } else {
+          // Backward compatibility: bcrypt's built-in salt
+          isPasswordValid = await bcrypt.compare(credentials.password as string, user.passwordHash)
+          console.log('Using bcrypt built-in salt (legacy):', credentials.email)
+        }
 
         if (!isPasswordValid) {
           return null

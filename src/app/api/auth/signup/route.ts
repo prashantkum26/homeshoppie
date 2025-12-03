@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(request: NextRequest) {
@@ -34,22 +35,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 12)
+    // Generate unique salt for this user
+    const passwordSalt = crypto.randomBytes(32).toString('hex')
+    
+    // Combine password with salt before hashing
+    const saltedPassword = password + passwordSalt
+    const hashedPassword = await bcrypt.hash(saltedPassword, 12)
 
-    // Create user
+    // Create user with explicit salt
     const user = await prisma.user.create({
       data: {
         name,
         email,
         phone: phone || null,
-        password: hashedPassword,
+        passwordHash: hashedPassword,
+        passwordSalt: passwordSalt,
         role: 'USER',
       }
     })
 
-    // Remove password from response
-    const { password: _, ...userWithoutPassword } = user
+    console.log(`User created with explicit salt: ${email}`)
+
+    // Remove password fields from response
+    const { passwordHash: _hash, passwordSalt: _salt, ...userWithoutPassword } = user
 
     return NextResponse.json({
       message: 'User created successfully',
