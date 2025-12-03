@@ -29,7 +29,7 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const addressId = params.id
+    const { id: addressId } = await params;
 
     const address = await prisma.address.findUnique({
       where: { id: addressId }
@@ -69,7 +69,7 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const addressId = params.id
+    const {id: addressId} = await params
     const body = await request.json()
 
     // Validate input
@@ -168,7 +168,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const addressId = params.id
+    const {id: addressId} = await params
     const body = await request.json()
 
     // Validate input
@@ -273,7 +273,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const addressId = params.id
+    const { id: addressId } = await params
 
     // Check if address exists and belongs to user
     const existingAddress = await prisma.address.findUnique({
