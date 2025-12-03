@@ -5,15 +5,19 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { signIn } from 'next-auth/react'
 import toast from 'react-hot-toast'
+import PhoneInput from '@/components/PhoneInput'
+import { PhoneValidationResult } from '@/lib/phoneValidation'
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
+    countryCode: 'IN',
     password: '',
     confirmPassword: ''
   })
+  const [phoneValidation, setPhoneValidation] = useState<PhoneValidationResult>({ isValid: true })
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
 
@@ -22,6 +26,21 @@ export default function SignupPage() {
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }))
+  }
+
+  const handlePhoneChange = (phone: string, validation: PhoneValidationResult) => {
+    setFormData(prev => ({
+      ...prev,
+      phone: phone
+    }))
+    setPhoneValidation(validation)
+  }
+
+  const handleCountryChange = (countryCode: string) => {
+    setFormData(prev => ({
+      ...prev,
+      countryCode: countryCode
     }))
   }
 
@@ -48,6 +67,13 @@ export default function SignupPage() {
       return
     }
 
+    // Phone validation
+    if (formData.phone && !phoneValidation.isValid) {
+      toast.error(phoneValidation.error || 'Please enter a valid phone number')
+      setIsLoading(false)
+      return
+    }
+
     try {
       // Create user account
       const response = await fetch('/api/auth/signup', {
@@ -58,7 +84,8 @@ export default function SignupPage() {
         body: JSON.stringify({
           name: formData.name,
           email: formData.email,
-          phone: formData.phone,
+          phone: phoneValidation.e164Format || formData.phone, // Use E.164 format if available
+          countryCode: formData.countryCode,
           password: formData.password,
         }),
       })
@@ -143,14 +170,13 @@ export default function SignupPage() {
               <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
                 Phone Number
               </label>
-              <input
-                id="phone"
-                name="phone"
-                type="tel"
+              <PhoneInput
                 value={formData.phone}
-                onChange={handleChange}
-                className="mt-1 appearance-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
+                onChange={handlePhoneChange}
+                countryCode={formData.countryCode}
+                onCountryChange={handleCountryChange}
                 placeholder="Enter your phone number"
+                className="mt-1"
               />
             </div>
             

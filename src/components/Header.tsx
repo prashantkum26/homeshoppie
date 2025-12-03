@@ -8,11 +8,11 @@ import {
   UserIcon, 
   Bars3Icon, 
   XMarkIcon,
-  MagnifyingGlassIcon,
   HeartIcon
 } from '@heroicons/react/24/outline'
 import useCartStore from '@/store/cartStore'
 import useWishlistStore from '@/store/wishlistStore'
+import SearchBar from './SearchBar'
 
 interface NavigationItem {
   name: string
@@ -123,16 +123,10 @@ export default function Header() {
 
           {/* Search Bar */}
           <div className="hidden md:flex flex-1 max-w-lg mx-8">
-            <div className="w-full relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search products..."
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
+            <SearchBar 
+              placeholder="Search products, categories..."
+              className="w-full"
+            />
           </div>
 
           {/* Right side actions */}
@@ -261,16 +255,11 @@ export default function Header() {
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
               {/* Mobile Search */}
               <div className="px-3 py-2">
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
-                  </div>
-                  <input
-                    type="text"
-                    placeholder="Search products..."
-                    className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md text-sm"
-                  />
-                </div>
+                <SearchBar 
+                  placeholder="Search products..."
+                  className="w-full"
+                  isMobile={true}
+                />
               </div>
 
               {/* Navigation Links */}

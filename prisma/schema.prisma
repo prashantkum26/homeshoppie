@@ -22,6 +22,8 @@ model User {
   emailVerified     DateTime?
   name              String?
   phone             String?   // Should validate: /^[\+]?[\d\s\-\(\)]{10,15}$/
+  phoneVerified     DateTime?
+  phoneCountryCode  String?   // ISO country code (IN, US, etc.)
   
   // Security Fields - Properly Annotated
   passwordHash      String?   // @encrypt - Bcrypt hashed password

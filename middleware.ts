@@ -68,12 +68,20 @@ export async function middleware(request: NextRequest) {
   response.headers.set('x-client-ip', ipAddress)
   response.headers.set('x-pathname', pathname)
   
-  // Basic route protection (redirect to signin if accessing protected routes without session)
+  // Protected routes that require authentication
   const protectedRoutes = ['/dashboard', '/orders', '/cart', '/checkout', '/admin']
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   
+  // Verification routes (allow access without verification)
+  const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
+  const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
+  
+  // Auth routes (login, signup, etc.)
+  const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
+  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+  
   if (isProtectedRoute) {
-    // Check if user is authenticated (simple cookie check)
+    // Check if user is authenticated
     const sessionToken = request.cookies.get('next-auth.session-token') || 
                          request.cookies.get('__Secure-next-auth.session-token')
     
@@ -81,6 +89,30 @@ export async function middleware(request: NextRequest) {
       const signInUrl = new URL('/auth/signin', request.url)
       signInUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(signInUrl)
+    }
+    
+    // For authenticated users, check verification status
+    // This requires a database lookup, so we'll implement it as a server-side check
+    try {
+      const { auth } = await import('./lib/auth')
+      const session = await auth()
+      
+      if (session?.user) {
+        // Check if email verification is required
+        if (!session.user.emailVerified) {
+          const verifyUrl = new URL('/auth/verify-email', request.url)
+          return NextResponse.redirect(verifyUrl)
+        }
+        
+        // Check if phone verification is required (if user has a phone number)
+        if (session.user.phone && !session.user.phoneVerified) {
+          const verifyUrl = new URL('/auth/verify-phone', request.url)
+          return NextResponse.redirect(verifyUrl)
+        }
+      }
+    } catch (error) {
+      console.error('Middleware verification check error:', error)
+      // On error, allow the request to proceed to avoid breaking the app
     }
   }
   

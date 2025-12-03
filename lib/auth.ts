@@ -10,6 +10,9 @@ declare module 'next-auth' {
       email: string
       name: string | null
       role: string
+      emailVerified: boolean
+      phoneVerified: boolean
+      phone: string | null
     } & DefaultSession['user']
   }
 
@@ -18,6 +21,9 @@ declare module 'next-auth' {
     email: string
     name: string | null
     role: string
+    emailVerified: boolean
+    phoneVerified: boolean
+    phone: string | null
   }
 }
 
@@ -48,7 +54,10 @@ export const authOptions = {
             isActive: true,
             isLocked: true,
             lockUntil: true,
-            failedLoginCount: true
+            failedLoginCount: true,
+            emailVerified: true,
+            phone: true,
+            phoneVerified: true
           }
         })
 
@@ -67,6 +76,20 @@ export const authOptions = {
           console.log('Account is locked until:', user.lockUntil)
           return null
         }
+
+        // Email verification is now required for login
+        if (!user.emailVerified) {
+          console.log('Email not verified for user:', credentials.email)
+          // Allow login but the middleware will redirect to verification
+          // return null // Uncomment this line to block login entirely
+        }
+
+        // Phone verification check (currently optional)
+        // if (user.phone && !user.phoneVerified) {
+        //   console.log('Phone not verified for user:', credentials.email)
+        //   // Allow login but the middleware will redirect to verification
+        //   // return null // Uncomment this line to block login entirely
+        // }
 
         let isPasswordValid = false
 
@@ -91,6 +114,9 @@ export const authOptions = {
           email: user.email,
           name: user.name,
           role: user.role,
+          emailVerified: !!user.emailVerified,
+          phoneVerified: !!(user as any).phoneVerified, // Temporary fallback
+          phone: user.phone,
         }
       }
     })
@@ -102,6 +128,9 @@ export const authOptions = {
     async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         token.role = user.role
+        token.emailVerified = user.emailVerified
+        token.phoneVerified = user.phoneVerified
+        token.phone = user.phone
       }
       return token
     },
@@ -109,6 +138,9 @@ export const authOptions = {
       if (token.sub) {
         session.user.id = token.sub
         session.user.role = token.role
+        session.user.emailVerified = token.emailVerified
+        session.user.phoneVerified = token.phoneVerified
+        session.user.phone = token.phone
       }
       return session
     }
