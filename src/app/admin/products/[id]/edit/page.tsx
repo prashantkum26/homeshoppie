@@ -23,8 +23,8 @@ interface Product {
   price: number
   compareAt: number | null
   stock: number
-  weight: number | null
-  unit: string | null
+  weight: number
+  unit: string
   tags: string[]
   categoryId: string
   isActive: boolean
@@ -219,7 +219,7 @@ export default function EditProductPage() {
           compareAt: product.compareAt || null,
           stock: product.stock,
           weight: product.weight || null,
-          unit: product.unit || null,
+          unit: product.unit,
           tags: product.tags,
           categoryId: product.categoryId,
           isActive: product.isActive,
@@ -425,6 +425,27 @@ export default function EditProductPage() {
                     placeholder="0.00"
                   />
                 </div>
+
+                {/* <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Unit
+                  </label>
+                  <select
+                    name="unit"
+                    value={formData.unit}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                  >
+                    <option value="KILOGRAMS">Kilogram (kg)</option>
+                    <option value="GRAMS">Gram (g)</option>
+                    <option value="POUNDS">Pound (lb)</option>
+                    <option value="OUNCES">Ounce (oz)</option>
+                    <option value="LITER">Liter (L)</option>
+                    <option value="MILLILITER">Milliliter (mL)</option>
+                    <option value="PIECE">Piece</option>
+                    <option value="PACK">Pack</option>
+                  </select>
+                </div> */}
                 
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -432,16 +453,18 @@ export default function EditProductPage() {
                   </label>
                   <select
                     name="unit"
-                    value={product.unit || 'kg'}
+                    value={product.unit || 'KILOGRAMS'}
                     onChange={handleInputChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                   >
-                    <option value="kg">Kilogram (kg)</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="l">Liter (l)</option>
-                    <option value="ml">Milliliter (ml)</option>
-                    <option value="piece">Piece</option>
-                    <option value="pack">Pack</option>
+                    <option value="KILOGRAMS">Kilogram (kg)</option>
+                    <option value="GRAMS">Gram (g)</option>
+                    <option value="POUNDS">Pound (lb)</option>
+                    <option value="OUNCES">Ounce (oz)</option>
+                    <option value="LITER">Liter (L)</option>
+                    <option value="MILLILITER">Milliliter (mL)</option>
+                    <option value="PIECE">Piece</option>
+                    <option value="PACK">Pack</option>
                   </select>
                 </div>
               </div>

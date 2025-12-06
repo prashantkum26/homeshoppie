@@ -1,59 +1,39 @@
-<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="plateGradient" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#B8860B;stop-opacity:1" />
-    </radialGradient>
-    <radialGradient id="ladduGradient" cx="40%" cy="30%" r="60%">
-      <stop offset="0%" style="stop-color:#FFA500;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
-    </radialGradient>
-    <radialGradient id="barfiGradient" cx="40%" cy="30%" r="60%">
-      <stop offset="0%" style="stop-color:#F0E68C;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#DAA520;stop-opacity:1" />
-    </radialGradient>
-  </defs>
-  
-  <!-- Background -->
-  <rect width="400" height="400" fill="#FFF8DC"/>
-  
-  <!-- Brass plate -->
-  <ellipse cx="200" cy="300" rx="150" ry="30" fill="#B8860B" opacity="0.5"/>
-  <ellipse cx="200" cy="280" rx="140" ry="25" fill="url(#plateGradient)"/>
-  
-  <!-- Laddu (round sweets) -->
-  <circle cx="150" cy="250" r="25" fill="url(#ladduGradient)"/>
-  <circle cx="250" cy="250" r="25" fill="url(#ladduGradient)"/>
-  <circle cx="200" cy="220" r="25" fill="url(#ladduGradient)"/>
-  
-  <!-- Barfi (square sweets) -->
-  <rect x="120" y="280" width="30" height="30" fill="url(#barfiGradient)" rx="5"/>
-  <rect x="160" y="280" width="30" height="30" fill="#FFFFE0" rx="5"/>
-  <rect x="210" y="280" width="30" height="30" fill="url(#barfiGradient)" rx="5"/>
-  <rect x="250" y="280" width="30" height="30" fill="#FFFFE0" rx="5"/>
-  
-  <!-- Gulab Jamun -->
-  <ellipse cx="180" cy="180" rx="15" ry="20" fill="#8B4513"/>
-  <ellipse cx="220" cy="180" rx="15" ry="20" fill="#8B4513"/>
-  
-  <!-- Decorative elements -->
-  <circle cx="150" cy="245" r="3" fill="#FFD700"/>
-  <circle cx="250" cy="245" r="3" fill="#FFD700"/>
-  <circle cx="200" cy="215" r="3" fill="#FFD700"/>
-  
-  <!-- Garnish - pistachios -->
-  <ellipse cx="145" cy="255" rx="2" ry="4" fill="#90EE90"/>
-  <ellipse cx="155" cy="255" rx="2" ry="4" fill="#90EE90"/>
-  <ellipse cx="195" cy="225" rx="2" ry="4" fill="#90EE90"/>
-  <ellipse cx="205" cy="225" rx="2" ry="4" fill="#90EE90"/>
-  
-  <!-- Title -->
-  <text x="200" y="80" text-anchor="middle" font-family="serif" font-size="32" font-weight="bold" fill="#FF6347">Traditional Sweets</text>
-  <text x="200" y="110" text-anchor="middle" font-family="serif" font-size="16" fill="#8B4513">Authentic Indian Mithai</text>
-  
-  <!-- Festival decoration -->
-  <path d="M50 50 Q60 40 70 50 Q60 60 50 50" fill="#FF69B4"/>
-  <path d="M330 50 Q340 40 350 50 Q340 60 330 50" fill="#FF69B4"/>
-  <path d="M50 350 Q60 340 70 350 Q60 360 50 350" fill="#FF69B4"/>
-  <path d="M330 350 Q340 340 350 350 Q340 360 330 350" fill="#FF69B4"/>
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="120" cy="120" r="110" fill="#FFF5FB" stroke="#F7A8D0" stroke-width="4"/>
+
+  <!-- Plate -->
+  <ellipse cx="120" cy="155" rx="80" ry="26" fill="#E0E0E0"/>
+  <ellipse cx="120" cy="150" rx="78" ry="22" fill="#FFFFFF"/>
+
+  <!-- Sweet 1: Laddu -->
+  <circle cx="90" cy="130" r="14" fill="#F4B24C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="90" cy="130" r="7" fill="#F7D58A"/>
+
+  <!-- Sweet 2: Laddu -->
+  <circle cx="118" cy="124" r="13" fill="#F7C55C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="118" cy="124" r="6" fill="#FFE08A"/>
+
+  <!-- Sweet 3: Laddu -->
+  <circle cx="146" cy="130" r="14" fill="#F4B24C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="146" cy="130" r="7" fill="#F7D58A"/>
+
+  <!-- Barfi stack 1 -->
+  <rect x="80" y="142" width="22" height="10" rx="2" fill="#FBE9E7" stroke="#D7CCC8" stroke-width="1.5"/>
+  <rect x="82" y="139" width="18" height="8" rx="2" fill="#FFCDD2"/>
+  <polygon points="82,139 100,139 101,140 83,140" fill="#F8BBD0"/>
+
+  <!-- Barfi stack 2 -->
+  <rect x="138" y="144" width="22" height="10" rx="2" fill="#FFF8E1" stroke="#D7CCC8" stroke-width="1.5"/>
+  <rect x="140" y="141" width="18" height="8" rx="2" fill="#FFE082"/>
+  <polygon points="140,141 158,141 159,142 141,142" fill="#FFD54F"/>
+
+  <!-- Syrup/gulab jamun bowl -->
+  <ellipse cx="120" cy="165" rx="20" ry="8" fill="#E0E0E0"/>
+  <ellipse cx="120" cy="163" rx="18" ry="6" fill="#E57373"/>
+  <circle cx="112" cy="162" r="4" fill="#FFAB91"/>
+  <circle cx="128" cy="162" r="4" fill="#FFAB91"/>
+
+  <!-- Plate shadow -->
+  <ellipse cx="120" cy="176" rx="70" ry="18" fill="#000000" opacity="0.06"/>
 </svg>

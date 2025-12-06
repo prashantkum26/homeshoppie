@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import type { ApiResponse, PaginatedResponse, Product } from '@/types'
-
-interface ProductCreateInput {
-  name: string
-  description: string
-  price: number
-  compareAt?: number
-  images: string[]
-  categoryId: string
-  stock: number
-  slug: string
-  weight?: number
-  unit?: string
-  tags: string[]
-}
+import type { PaginatedResponse, Product } from '@/types'
 
 interface ProductWithCategory {
   id: string
@@ -22,6 +8,7 @@ interface ProductWithCategory {
   slug: string
   description: string | null
   price: number
+  compareAt?: number | null
   originalPrice: number | null
   stock: number
   sku: string | null
@@ -36,106 +23,6 @@ interface ProductWithCategory {
   }
   inStock: boolean
   discountPercent: number
-}
-
-export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<ProductWithCategory> | { error: string }>> {
-  try {
-    const body: ProductCreateInput = await request.json()
-    const { 
-      name, 
-      description, 
-      price, 
-      compareAt, 
-      images, 
-      categoryId, 
-      stock, 
-      slug, 
-      weight, 
-      unit, 
-      tags 
-    } = body
-
-    // Validate required fields
-    if (!name || !description || !price || !categoryId || !slug || !images?.length) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      )
-    }
-
-    // Check if product already exists
-    const existingProduct = await prisma.product.findFirst({
-      where: {
-        OR: [
-          { name },
-          { slug }
-        ]
-      }
-    })
-
-    if (existingProduct) {
-      return NextResponse.json(
-        { error: 'Product already exists' },
-        { status: 409 }
-      )
-    }
-
-    const product = await prisma.product.create({
-      data: {
-        name,
-        description,
-        price,
-        compareAt: compareAt ?? null,
-        images,
-        categoryId,
-        stock,
-        slug,
-        weight: weight ?? null,
-        unit: unit ?? null,
-        tags
-      },
-      include: {
-        category: {
-          select: { name: true, slug: true }
-        }
-      }
-    })
-
-    const productWithMeta: ProductWithCategory = {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      description: product.description,
-      price: product.price,
-      originalPrice: product.compareAt,
-      stock: product.stock,
-      sku: null,
-      images: product.images,
-      categoryId: product.categoryId,
-      featured: false,
-      createdAt: product.createdAt,
-      updatedAt: product.updatedAt,
-      category: product.category,
-      inStock: product.stock > 0,
-      discountPercent: product.compareAt 
-        ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
-        : 0
-    }
-
-    const response: ApiResponse<ProductWithCategory> = {
-      success: true,
-      data: productWithMeta,
-      message: 'Product created successfully'
-    }
-
-    return NextResponse.json(response, { status: 201 })
-  } catch (error) {
-    console.error('Error creating product:', error)
-    return NextResponse.json(
-      { error: 'Failed to create product' },
-      { status: 500 }
-    )
-  }
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse<PaginatedResponse<ProductWithCategory> | { error: string }>> {
@@ -170,8 +57,8 @@ export async function GET(request: NextRequest): Promise<NextResponse<PaginatedR
       isActive: true,
       ...(inStockOnly && { stock: { gt: 0 } }),
       ...(categoryId && { categoryId }),
-      ...(categorySlug && { 
-        category: { slug: categorySlug } 
+      ...(categorySlug && {
+        category: { slug: categorySlug }
       }),
       ...(minPrice !== undefined && { price: { gte: minPrice } }),
       ...(maxPrice !== undefined && { price: { lte: maxPrice } }),
@@ -212,26 +99,29 @@ export async function GET(request: NextRequest): Promise<NextResponse<PaginatedR
     })
 
     // Transform products to include computed fields
-    const transformedProducts: ProductWithCategory[] = products.map((product: Product) => ({
+
+    const transformedProducts: ProductWithCategory[] = products.map((product) => ({
       id: product.id,
       name: product.name,
       slug: product.slug,
       description: product.description,
       price: product.price,
-      originalPrice: product.compareAt,
+      originalPrice: product.compareAtPrice,
+      compareAt: product.compareAtPrice,
       stock: product.stock,
-      sku: null,
       images: product.images,
       categoryId: product.categoryId,
-      featured: false,
+      category: product.category,
+      tags: product.tags,
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
-      category: product.category,
-      inStock: product.stock > 0,
-      discountPercent: product.compareAt 
-        ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
-        : 0
-    }))
+      discountPercent: product.compareAtPrice
+        ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
+        : 0,
+      sku: product.sku,
+      featured: product.isFeatured,
+      inStock: product.stock > 0
+    }));
 
     const response: PaginatedResponse<ProductWithCategory> = {
       success: true,

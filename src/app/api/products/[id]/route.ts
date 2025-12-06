@@ -68,15 +68,16 @@ export async function GET(
     // Transform product to include computed fields
     const transformedProduct: TransformedProduct = {
       ...product,
+      compareAt: product.compareAtPrice,
       inStock: product.stock > 0,
-      discountPercent: product.compareAt 
-        ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
+      discountPercent: product.compareAtPrice 
+        ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
         : 0,
       relatedProducts: relatedProducts.map((related: any) => ({
         ...related,
         inStock: related.stock > 0,
-        discountPercent: related.compareAt 
-          ? Math.round(((related.compareAt - related.price) / related.compareAt) * 100)
+        discountPercent: related.compareAtPrice
+          ? Math.round(((related.compareAtPrice - related.price) / related.compareAtPrice) * 100)
           : 0
       }))
     }

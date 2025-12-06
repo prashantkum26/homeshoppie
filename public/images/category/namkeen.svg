@@ -1,66 +1,33 @@
-<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="bowlGradient" cx="50%" cy="30%" r="70%">
-      <stop offset="0%" style="stop-color:#DAA520;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#B8860B;stop-opacity:1" />
-    </radialGradient>
-    <linearGradient id="snackGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#FFA500;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
-    </linearGradient>
-  </defs>
-  
-  <!-- Background -->
-  <rect width="400" height="400" fill="#FFF5EE"/>
-  
-  <!-- Large bowl (center) -->
-  <ellipse cx="200" cy="320" rx="100" ry="25" fill="#8B4513" opacity="0.3"/>
-  <ellipse cx="200" cy="300" rx="90" ry="20" fill="url(#bowlGradient)"/>
-  <path d="M110 300 Q200 250 290 300 L280 290 Q200 240 120 290 Z" fill="url(#bowlGradient)"/>
-  
-  <!-- Mixture/Namkeen pieces in main bowl -->
-  <circle cx="180" cy="280" r="4" fill="#FF6347"/>
-  <circle cx="220" cy="285" r="3" fill="#FFD700"/>
-  <circle cx="195" cy="295" r="3" fill="#FFA500"/>
-  <circle cx="210" cy="275" r="4" fill="#FF4500"/>
-  <ellipse cx="170" cy="290" rx="3" ry="6" fill="#DAA520"/>
-  <ellipse cx="230" cy="290" rx="3" ry="6" fill="#DAA520"/>
-  <ellipse cx="200" cy="270" rx="6" ry="3" fill="#FF6347"/>
-  
-  <!-- Small bowls -->
-  <ellipse cx="80" cy="200" rx="40" ry="10" fill="url(#bowlGradient)"/>
-  <path d="M40 200 Q80 175 120 200 L115 195 Q80 170 45 195 Z" fill="url(#bowlGradient)"/>
-  
-  <ellipse cx="320" cy="220" rx="35" ry="8" fill="url(#bowlGradient)"/>
-  <path d="M285 220 Q320 200 355 220 L350 215 Q320 195 290 215 Z" fill="url(#bowlGradient)"/>
-  
-  <!-- Snacks in small bowls -->
-  <!-- Sev (thin noodles) -->
-  <path d="M60 185 Q70 180 80 185 Q90 180 100 185" stroke="#FFD700" stroke-width="2" fill="none"/>
-  <path d="M65 190 Q75 185 85 190 Q95 185 105 190" stroke="#FFD700" stroke-width="2" fill="none"/>
-  <path d="M55 195 Q65 190 75 195 Q85 190 95 195" stroke="#FFD700" stroke-width="2" fill="none"/>
-  
-  <!-- Bhujia pieces -->
-  <circle cx="310" cy="210" r="2" fill="#FF4500"/>
-  <circle cx="325" cy="205" r="2" fill="#FFA500"/>
-  <circle cx="320" cy="215" r="2" fill="#FF6347"/>
-  <ellipse cx="305" cy="215" rx="2" ry="4" fill="#DAA520"/>
-  <ellipse cx="335" cy="210" rx="2" ry="4" fill="#DAA520"/>
-  
-  <!-- Scattered pieces around -->
-  <circle cx="150" cy="150" r="2" fill="#FF4500"/>
-  <circle cx="250" cy="160" r="2" fill="#FFD700"/>
-  <circle cx="300" cy="120" r="2" fill="#FFA500"/>
-  <ellipse cx="100" cy="140" rx="2" ry="3" fill="#DAA520"/>
-  
-  <!-- Title -->
-  <text x="200" y="60" text-anchor="middle" font-family="serif" font-size="32" font-weight="bold" fill="#DC143C">Crunchy Namkeen</text>
-  <text x="200" y="85" text-anchor="middle" font-family="serif" font-size="16" fill="#8B4513">Savory Indian Snacks</text>
-  
-  <!-- Decorative spice powder -->
-  <circle cx="50" cy="350" r="1" fill="#FF4500" opacity="0.6"/>
-  <circle cx="350" cy="360" r="1" fill="#FF6347" opacity="0.6"/>
-  <circle cx="60" cy="370" r="1" fill="#FFD700" opacity="0.6"/>
-  <circle cx="340" cy="380" r="1" fill="#FFA500" opacity="0.6"/>
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="120" cy="120" r="110" fill="#FFF9E6" stroke="#F0C56A" stroke-width="4"/>
+
+  <!-- Plate -->
+  <ellipse cx="120" cy="155" rx="80" ry="26" fill="#E0E0E0"/>
+  <ellipse cx="120" cy="150" rx="78" ry="22" fill="#FFFFFF"/>
+
+  <!-- Snack 1: Samosa -->
+  <path d="M70 132 L88 100 L106 132 Z" fill="#F4B24C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="82" cy="118" r="2" fill="#D3842A"/>
+  <circle cx="94" cy="118" r="2" fill="#D3842A"/>
+
+  <!-- Snack 2: Kachori -->
+  <circle cx="140" cy="118" r="16" fill="#F4B24C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="140" cy="118" r="10" fill="#F7D58A"/>
+  <circle cx="140" cy="118" r="2" fill="#D3842A"/>
+
+  <!-- Snack 3: Murukku/Chakli -->
+  <circle cx="105" cy="138" r="13" fill="none" stroke="#D3842A" stroke-width="3"/>
+  <circle cx="105" cy="138" r="7" fill="none" stroke="#F4B24C" stroke-width="3"/>
+
+  <!-- Snack 4: Laddus -->
+  <circle cx="165" cy="140" r="9" fill="#F4B24C" stroke="#D3842A" stroke-width="2"/>
+  <circle cx="180" cy="146" r="8" fill="#F7C55C" stroke="#D3842A" stroke-width="2"/>
+
+  <!-- Chutney bowl -->
+  <ellipse cx="110" cy="162" rx="18" ry="7" fill="#E0E0E0"/>
+  <ellipse cx="110" cy="160" rx="16" ry="5" fill="#8BC34A"/>
+
+  <!-- Plate shadow -->
+  <ellipse cx="120" cy="176" rx="70" ry="18" fill="#000000" opacity="0.06"/>
 </svg>

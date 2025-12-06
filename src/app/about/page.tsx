@@ -79,9 +79,10 @@ export default function AboutPage() {
       <div className="relative isolate px-6 pt-14 lg:px-8">
         <div className="mx-auto max-w-2xl py-16 sm:py-24 lg:py-8">
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-6xl">
+            {/* <h1 className="text-2xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               About HomeShoppie
-            </h1>
+            </h1> */}
+            <h1 className="text-4xl font-bold text-gray-900 mb-4">About HomeShoppie</h1>
             <p className="mt-6 text-lg leading-8 text-gray-600">
               We're passionate about helping you create the perfect home. From furniture to decor, 
               we curate the finest products to transform your living spaces into something extraordinary.
@@ -93,8 +94,9 @@ export default function AboutPage() {
       {/* Mission section */}
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="mx-auto max-w-2xl lg:text-center">
-          <h2 className="text-base font-semibold leading-7 text-primary-600">Our Mission</h2>
-          <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+          <h2 className="text-3xl font-semibold leading-7 text-primary-600 py-2">Our Mission</h2>
+          <hr />
+          <p className="mt-2 font-bold tracking-tight text-gray-900 sm:text-xl">
             Making Beautiful Homes Accessible
           </p>
           <p className="mt-6 text-lg leading-8 text-gray-600">

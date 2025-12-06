@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import crypto from 'crypto'
+import { sendEmail } from '@/lib/email'
 
 // Rate limiter: 3 requests per 5 minutes per IP
 const limiter = rateLimit({
@@ -28,7 +29,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { email } = await request.json()
-    
+
     // Validate input
     if (!email || typeof email !== 'string') {
       return NextResponse.json({
@@ -40,11 +41,11 @@ export async function POST(request: NextRequest) {
     // Verify the email belongs to the current user
     const user = await prisma.user.findUnique({
       where: { id: session.user.id },
-      select: { 
-        id: true, 
-        email: true, 
+      select: {
+        id: true,
+        email: true,
         emailVerified: true,
-        isActive: true 
+        isActive: true
       }
     })
 
@@ -104,22 +105,27 @@ export async function POST(request: NextRequest) {
     // TODO: Send email using your preferred email service
     // For now, we'll just log it (replace with actual email service)
     console.log(`
-=== EMAIL VERIFICATION ===
-To: ${user.email}
-Subject: Verify your HomeShoppie account
-Link: ${verificationUrl}
-===========================
-`)
+      === EMAIL VERIFICATION ===
+      To: ${user.email}
+      Subject: Verify your HomeShoppie account
+      Link: ${verificationUrl}
+      ===========================
+    `)
+
+    sendEmail({
+      subject:"Verify your HomeShoppie account",
+      to: `${user.email}`,      
+    });
 
     // Simulate email sending for development
     // In production, integrate with Resend, SendGrid, AWS SES, etc.
-    
+
     // Log the activity
     try {
-      const identifier = request.headers.get('x-forwarded-for') || 
-                        request.headers.get('x-real-ip') || 
-                        'unknown'
-      
+      const identifier = request.headers.get('x-forwarded-for') ||
+        request.headers.get('x-real-ip') ||
+        'unknown'
+
       await prisma.userActivityLog.create({
         data: {
           userId: user.id,

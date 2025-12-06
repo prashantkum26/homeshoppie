@@ -346,7 +346,7 @@ export default function ProductPage() {
                       ₹{product.compareAt}
                     </span>
                     <span className="bg-green-100 text-green-800 text-sm px-2 py-1 rounded">
-                      Save ₹{product.compareAt - product.price}
+                      Save ₹{(product.compareAt - product.price).toFixed(2)}
                     </span>
                   </>
                 )}

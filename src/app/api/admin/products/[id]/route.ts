@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '../../../../../../lib/auth'
 import { prisma } from '../../../../../../lib/prisma'
 
-// GET single product for admin
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+interface ProductResponse {
+  name: string
+  description: string
+  price: number
+  compareAt?: number | null
+  images: string[]
+  categoryId: string
+  stock: number
+  slug: string
+  weight?: number | null
+  unit?: string | null 
+  tags: string[]
+}
+
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
 
@@ -38,7 +48,21 @@ export async function GET(
       )
     }
 
-    return NextResponse.json(product)
+    const productRes: ProductResponse = {
+      name: product.name,
+      categoryId: product.categoryId,
+      description: product.description,
+      images: product.images,
+      price: product.price,
+      slug: product.slug,
+      stock: product.stock,
+      tags: product.tags,
+      unit: product.weightUnit,
+      weight: product.weight || 0,
+      compareAt: product.compareAtPrice
+    }
+
+    return NextResponse.json(productRes)
   } catch (error) {
     console.error('Error fetching product:', error)
     return NextResponse.json(
@@ -121,7 +145,7 @@ export async function PATCH(
     }
 
     if (compareAt !== undefined) {
-      updateData.compareAt = compareAt || null
+      updateData.compareAtPrice = compareAt || null
     }
 
     if (stock !== undefined) {
@@ -139,7 +163,7 @@ export async function PATCH(
     }
 
     if (unit !== undefined) {
-      updateData.unit = unit || null
+      updateData.weightUnit = unit || null
     }
 
     if (tags !== undefined) {

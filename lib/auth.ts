@@ -78,11 +78,11 @@ export const authOptions = {
         }
 
         // Email verification is now required for login
-        if (!user.emailVerified) {
-          console.log('Email not verified for user:', credentials.email)
-          // Allow login but the middleware will redirect to verification
-          // return null // Uncomment this line to block login entirely
-        }
+        // if (!user.emailVerified) {
+        //   console.log('Email not verified for user:', credentials.email)
+        // Allow login but the middleware will redirect to verification
+        // return null // Uncomment this line to block login entirely
+        // }
 
         // Phone verification check (currently optional)
         // if (user.phone && !user.phoneVerified) {

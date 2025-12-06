@@ -278,3 +278,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Built with ❤️ using Next.js, MongoDB, and modern web technologies**
 
 🚀 **Get started in seconds with `npm run init`**
+
+
+
+
+
+mongod --replSet "rs0" --dbpath /data/db --port 27017
+rs.initiate()

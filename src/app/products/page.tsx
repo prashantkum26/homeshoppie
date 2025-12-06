@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { 
+import {
   MagnifyingGlassIcon,
   AdjustmentsHorizontalIcon,
   ChevronDownIcon,
@@ -10,6 +10,7 @@ import {
 } from '@heroicons/react/24/outline'
 import useCartStore from '@/store/cartStore'
 import toast from 'react-hot-toast'
+import { getCategoryIcon, getCategoryImagePath } from '@/utils/imageUtil'
 
 interface Product {
   id: string
@@ -42,17 +43,6 @@ interface ProductsResponse {
   }
 }
 
-const getProductIcon = (categoryName?: string) => {
-  switch (categoryName) {
-    case 'Ghee': return '🧈'
-    case 'Oils': return '🫒'
-    case 'Sweets': return '🍪'
-    case 'Namkeen': return '🥨'
-    case 'Pooja Items': return '🪔'
-    default: return '📦'
-  }
-}
-
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
@@ -72,10 +62,10 @@ export default function ProductsPage() {
 
   useEffect(() => {
     let isMounted = true
-    
+
     const fetchProducts = async () => {
       if (!isMounted) return
-      
+
       try {
         const params = new URLSearchParams({
           page: currentPage.toString(),
@@ -94,7 +84,7 @@ export default function ProductsPage() {
         }
 
         const data: ProductsResponse = await response.json()
-        
+
         if (isMounted) {
           setProducts(data.data)
           setPagination(data.pagination)
@@ -138,7 +128,7 @@ export default function ProductsPage() {
       toast.error('Product is out of stock')
       return
     }
-    
+
     addItem({ ...product, quantity: 1 } as any)
     toast.success(`Added ${product.name} to cart!`)
   }
@@ -298,16 +288,43 @@ export default function ProductsPage() {
                         }}
                       />
                     ) : null}
-                    
+
                     {/* Fallback placeholder - shown when no images or image fails to load */}
-                    <div 
+                    {/* <div 
                       className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
                         product.images && product.images.length > 0 ? 'hidden' : 'flex'
                       }`}
                     >
-                      <span className="text-6xl">{getProductIcon(product.category?.name)}</span>
-                    </div>
-                    
+                      <span className="text-6xl">{getCategoryIcon(product.category?.name || "")}</span>
+                    </div> */}
+
+                    {!product.images?.length && (
+                      <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                        {getCategoryImagePath(product?.category?.name || "") ? (
+                          <img
+                            src={getCategoryImagePath(product?.category?.name || "")!}
+                            alt={product?.category?.name || ""}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Fallback to emoji icon if image fails to load
+                              const target = e.target as HTMLImageElement
+                              target.style.display = 'none'
+                              const fallback = target.nextElementSibling as HTMLElement
+                              if (fallback) fallback.style.display = 'flex'
+                            }}
+                          />
+                        ) : null}
+                        {/* Fallback emoji - shown when no image or image fails to load */}
+                        <div
+                          className={`w-full h-full flex items-center justify-center ${getCategoryImagePath(product?.category?.name || "") ? 'hidden' : 'flex'
+                            }`}
+                        >
+                          <span className="text-4xl">{getCategoryIcon(product?.category?.name || "")}</span>
+                        </div>
+                      </div>
+                    )}
+
+
                     {product.discountPercent > 0 && (
                       <div className="absolute top-2 left-2">
                         <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">
@@ -315,7 +332,7 @@ export default function ProductsPage() {
                         </span>
                       </div>
                     )}
-                    
+
                     {!product.inStock && (
                       <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                         <span className="bg-gray-800 text-white px-3 py-1 rounded font-medium">
@@ -342,9 +359,8 @@ export default function ProductsPage() {
                     <span className="text-sm text-gray-500">
                       {product.category?.name}
                     </span>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
+                    <span className={`text-xs px-2 py-1 rounded ${product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                      }`}>
                       {product.inStock ? 'In Stock' : 'Out of Stock'}
                     </span>
                   </div>
@@ -360,18 +376,17 @@ export default function ProductsPage() {
                         </span>
                       )}
                     </div>
-                    
+
                     <button
                       onClick={(e) => {
                         e.preventDefault()
                         handleAddToCart(product)
                       }}
                       disabled={!product.inStock}
-                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        product.inStock
+                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${product.inStock
                           ? 'bg-primary-600 hover:bg-primary-700 text-white'
                           : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                      }`}
+                        }`}
                     >
                       <ShoppingCartIcon className="h-4 w-4" />
                       Add
@@ -394,7 +409,7 @@ export default function ProductsPage() {
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">No products found</h3>
             <p className="text-gray-600 mb-4">
-              {searchQuery 
+              {searchQuery
                 ? `No products match your search for "${searchQuery}"`
                 : 'No products available at the moment'
               }
@@ -424,26 +439,25 @@ export default function ProductsPage() {
             >
               Previous
             </button>
-            
+
             {Array.from({ length: Math.min(5, pagination.pages) }, (_, i) => {
               const page = i + 1
               const isActive = page === currentPage
-              
+
               return (
                 <button
                   key={page}
                   onClick={() => handlePageChange(page)}
-                  className={`px-4 py-2 rounded-lg ${
-                    isActive 
-                      ? 'bg-primary-600 text-white' 
+                  className={`px-4 py-2 rounded-lg ${isActive
+                      ? 'bg-primary-600 text-white'
                       : 'border border-gray-300 hover:bg-gray-50'
-                  }`}
+                    }`}
                 >
                   {page}
                 </button>
               )
             })}
-            
+
             <button
               onClick={() => handlePageChange(currentPage + 1)}
               disabled={currentPage >= pagination.pages}

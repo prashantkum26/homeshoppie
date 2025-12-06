@@ -903,7 +903,12 @@ enum WeightUnit {
   KILOGRAMS
   POUNDS
   OUNCES
+  LITER
+  MILLILITER
+  PIECE
+  PACK
 }
+
 
 enum AccessLevel {
   PUBLIC

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ChevronLeftIcon, ChevronRightIcon } from '@heroicons/react/24/outline'
+import { getCategoryImagePath } from '@/utils/imageUtil'
 
 interface HeroSlide {
   id: number
@@ -14,38 +15,31 @@ interface HeroSlide {
   link: string
 }
 
-const heroSlides: HeroSlide[] = [
-  {
-    id: 1,
-    title: "Premium Homemade Ghee",
-    subtitle: "Pure, Traditional & Authentic",
-    description: "Made from fresh cow and buffalo milk using traditional bilona method. Rich in nutrients and flavor.",
-    image: "/images/ghee-hero.jpg",
-    cta: "Shop Ghee",
-    link: "/categories/ghee"
-  },
-  {
-    id: 2,
-    title: "Fresh Mustard Oil",
-    subtitle: "Cold-Pressed from Sarso Mill",
-    description: "Pure mustard oil extracted using traditional methods. Perfect for cooking and health benefits.",
-    image: "/images/oil-hero.jpg",
-    cta: "Shop Oil",
-    link: "/categories/oils"
-  },
-  {
-    id: 3,
-    title: "Traditional Sweets",
-    subtitle: "Thekua, Gujiya & More",
-    description: "Handmade traditional sweets prepared with love and authentic recipes passed down through generations.",
-    image: "/images/sweets-hero.jpg",
-    cta: "Shop Sweets",
-    link: "/categories/sweets"
-  }
-]
-
-export default function HeroSection() {
+export default function HeroSection({ heroSlides }: { heroSlides: HeroSlide[] }) {
   const [currentSlide, setCurrentSlide] = useState<number>(0)
+
+  // If heroSlides is empty -> return skeleton UI
+  if (!heroSlides || heroSlides.length === 0) {
+    return (
+      <section className="relative h-[600px] bg-gray-100 animate-pulse">
+        <div className="container-custom h-full flex items-center">
+          <div className="w-full md:w-1/2 space-y-6">
+            <div className="h-10 w-3/4 bg-gray-300 rounded"></div>
+            <div className="h-6 w-1/2 bg-gray-300 rounded"></div>
+            <div className="h-24 w-full bg-gray-300 rounded"></div>
+            <div className="flex space-x-4">
+              <div className="h-12 w-32 bg-gray-300 rounded"></div>
+              <div className="h-12 w-32 bg-gray-300 rounded"></div>
+            </div>
+          </div>
+
+          <div className="hidden md:flex w-1/2 items-center justify-center">
+            <div className="h-96 w-full bg-gray-300 rounded-lg"></div>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -73,7 +67,7 @@ export default function HeroSection() {
         <div className="flex items-center h-full">
           <div className="w-full md:w-1/2 pr-8">
             <div className="animate-fadeIn">
-              <h1 className="text-hero text-gray-900 mb-6">
+              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">
                 {heroSlides[currentSlide].title}
               </h1>
               <h2 className="text-subtitle text-primary-600 mb-8">
@@ -103,7 +97,22 @@ export default function HeroSection() {
           <div className="hidden md:block w-1/2">
             <div className="relative h-96 bg-gradient-to-br from-primary-200 to-primary-300 rounded-lg flex items-center justify-center">
               <div className="text-center">
-                <div className="text-6xl mb-4">🥛</div>
+                <div className="text-6xl mb-4">
+                  {getCategoryImagePath(heroSlides[currentSlide].title) ? (
+                    <img
+                      src={getCategoryImagePath(heroSlides[currentSlide].title)!}
+                      alt={heroSlides[currentSlide].title}
+                      className="w-full h-[200px] object-cover"
+                      onError={(e) => {
+                        // Fallback to emoji icon if image fails to load
+                        const target = e.target as HTMLImageElement
+                        target.style.display = 'none'
+                        const fallback = target.nextElementSibling as HTMLElement
+                        if (fallback) fallback.style.display = 'flex'
+                      }}
+                    />
+                  ) : <> 🥛 </>}
+                </div>
                 <p className="text-primary-800 font-semibold">
                   {heroSlides[currentSlide].title}
                 </p>
@@ -132,11 +141,10 @@ export default function HeroSection() {
             <button
               key={index}
               onClick={() => goToSlide(index)}
-              className={`w-3 h-3 rounded-full transition-all ${
-                currentSlide === index
-                  ? 'bg-primary-600'
-                  : 'bg-white/50 hover:bg-white/80'
-              }`}
+              className={`w-3 h-3 rounded-full transition-all ${currentSlide === index
+                ? 'bg-primary-600'
+                : 'bg-white/50 hover:bg-white/80'
+                }`}
             />
           ))}
         </div>

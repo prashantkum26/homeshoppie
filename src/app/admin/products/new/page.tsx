@@ -44,7 +44,7 @@ export default function NewProductPage() {
     compareAt: 0,
     stock: 0,
     weight: 0,
-    unit: 'kg',
+    unit: 'KILOGRAMS',
     tags: [],
     categoryId: '',
     isActive: true,
@@ -187,7 +187,7 @@ export default function NewProductPage() {
       toast.success('Product created successfully!')
       
       // Redirect to product edit page where images can be managed
-      router.push(`/admin/products/${newProduct.id}/edit`)
+      router.push(`/admin/products/${newProduct?.data.id}/edit`)
       
     } catch (error: any) {
       toast.error(error.message || 'Failed to create product')
@@ -390,12 +390,14 @@ export default function NewProductPage() {
                     onChange={handleInputChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                   >
-                    <option value="kg">Kilogram (kg)</option>
-                    <option value="g">Gram (g)</option>
-                    <option value="l">Liter (l)</option>
-                    <option value="ml">Milliliter (ml)</option>
-                    <option value="piece">Piece</option>
-                    <option value="pack">Pack</option>
+                    <option value="KILOGRAMS">Kilogram (kg)</option>
+                    <option value="GRAMS">Gram (g)</option>
+                    <option value="POUNDS">Pound (lb)</option>
+                    <option value="OUNCES">Ounce (oz)</option>
+                    <option value="LITER">Liter (L)</option>
+                    <option value="MILLILITER">Milliliter (mL)</option>
+                    <option value="PIECE">Piece</option>
+                    <option value="PACK">Pack</option>
                   </select>
                 </div>
               </div>

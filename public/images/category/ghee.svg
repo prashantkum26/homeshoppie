@@ -1,31 +1,41 @@
-<svg width="400" height="400" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <radialGradient id="gheeGradient" cx="50%" cy="30%" r="60%">
-      <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
-      <stop offset="50%" style="stop-color:#FFA500;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
-    </radialGradient>
-  </defs>
-  
-  <!-- Background -->
-  <rect width="400" height="400" fill="#FFF8DC"/>
-  
-  <!-- Brass pot -->
-  <ellipse cx="200" cy="280" rx="80" ry="40" fill="#B8860B"/>
-  <rect x="120" y="200" width="160" height="80" fill="#DAA520"/>
-  <ellipse cx="200" cy="200" rx="80" ry="40" fill="#FFD700"/>
-  
-  <!-- Ghee inside -->
-  <ellipse cx="200" cy="210" rx="60" ry="30" fill="url(#gheeGradient)"/>
-  
-  <!-- Wooden spoon -->
-  <rect x="180" y="120" width="8" height="100" fill="#8B4513" transform="rotate(15 184 170)"/>
-  <ellipse cx="185" cy="125" rx="12" ry="8" fill="#A0522D" transform="rotate(15 185 125)"/>
-  
-  <!-- Dripping ghee -->
-  <circle cx="190" cy="180" r="3" fill="#FFD700"/>
-  <circle cx="195" cy="190" r="2" fill="#FFA500"/>
-  
-  <!-- Traditional elements -->
-  <text x="200" y="350" text-anchor="middle" font-family="serif" font-size="24" fill="#8B4513">Pure Ghee</text>
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background circle -->
+  <circle cx="120" cy="120" r="110" fill="#FFFBEA" stroke="#FBC02D" stroke-width="4"/>
+
+  <!-- Ground / shadow -->
+  <ellipse cx="120" cy="182" rx="72" ry="18" fill="#000000" opacity="0.06"/>
+
+  <!-- Jar body -->
+  <rect x="80" y="82" width="80" height="88" rx="22" fill="#FFE082" stroke="#F9A825" stroke-width="2"/>
+  <rect x="86" y="88" width="68" height="74" rx="20" fill="#FFECB3"/>
+
+  <!-- Ghee level -->
+  <rect x="86" y="116" width="68" height="40" rx="18" fill="#FFCA28" opacity="0.95"/>
+
+  <!-- Jar neck -->
+  <rect x="90" y="64" width="60" height="18" rx="8" fill="#FFE082" stroke="#F9A825" stroke-width="2"/>
+  <!-- Cloth/foil band -->
+  <rect x="92" y="60" width="56" height="6" rx="3" fill="#FBC02D"/>
+
+  <!-- Lid / top rim -->
+  <ellipse cx="120" cy="60" rx="30" ry="6" fill="#FFF8E1" stroke="#F9A825" stroke-width="1.5"/>
+
+  <!-- Label -->
+  <rect x="94" y="118" width="52" height="30" rx="10" fill="#FFFDF5" stroke="#FBC02D" stroke-width="1.5"/>
+
+  <!-- Small ghee drop on label -->
+  <path d="M120 122 C116 129,114 133,114 136 C114 140,117 143,120 143 C123 143,126 140,126 136 C126 133,124 129,120 122 Z"
+        fill="#FBC02D" stroke="#F57F17" stroke-width="1.1"/>
+
+  <!-- Warm highlight on glass -->
+  <path d="M90 96 C90 84,102 78,102 78 L102 158 C95 148,90 138,90 128 Z"
+        fill="#FFFFFF" opacity="0.35"/>
+
+  <!-- Wooden spoon hint on side -->
+  <path d="M152 86 C158 80,166 80,170 86 C174 92,173 100,168 104 L160 150 C159 154,155 156,152 154 C149 152,148 148,149 145 L157 100 C153 96,150 92,152 86 Z"
+        fill="#D7CCC8" stroke="#8D6E63" stroke-width="1.4"/>
+
+  <!-- Sparkle for 'pure' feel -->
+  <path d="M96 72 L100 76 L96 80 L92 76 Z" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="102" cy="70" r="2" fill="#FFFFFF" opacity="0.9"/>
 </svg>

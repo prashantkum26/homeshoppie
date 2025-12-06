@@ -70,16 +70,22 @@ export default async function proxy(request: NextRequest) {
   response.headers.set('x-pathname', pathname)
 
   // Protected routes that require authentication
-  const protectedRoutes = ['/dashboard', '/orders', '/cart', '/checkout', '/admin']
+  const protectedRoutes = [
+    '/dashboard', 
+    '/orders', 
+    '/cart', 
+    '/checkout', 
+    '/admin'
+  ];
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
 
   // Verification routes (allow access without verification)
-  const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
-  const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
+  // const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
+  // const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
 
   // Auth routes (login, signup, etc.)
-  const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
-  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+  // const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
+  // const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
 
   if (isProtectedRoute) {
     // Check if user is authenticated

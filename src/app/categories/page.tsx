@@ -138,7 +138,7 @@ export default function CategoriesPage() {
                 >
                   <div className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-300 transform group-hover:scale-105 overflow-hidden border border-gray-200">
                     <div className={`bg-gradient-to-br ${getCategoryColor(category.name)} p-8 text-center`}>
-                      <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow overflow-hidden">
+                      <div className="w-20 h-20 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg group-hover:shadow-xl transition-shadow overflow-hidden">
                         {getCategoryImagePath(category.name) ? (
                           <img
                             src={getCategoryImagePath(category.name)!}

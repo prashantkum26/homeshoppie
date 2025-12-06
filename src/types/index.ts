@@ -25,14 +25,14 @@ export interface Product {
   slug: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   stock: number
   images: string[]
   categoryId: string
   category?: Category
   isActive: boolean
   weight?: number | null
-  unit?: string | null
+  weightUnit?: string | null
   tags: string[]
   createdAt: Date
   updatedAt: Date
