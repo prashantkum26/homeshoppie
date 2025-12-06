@@ -227,31 +227,6 @@ export default function SignInPage() {
             </div>
           </form>
 
-          {/* Demo accounts */}
-          <div className="mt-6">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-gray-300" />
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-gray-500">Demo Accounts</span>
-              </div>
-            </div>
-
-            <div className="mt-4 space-y-2">
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  <strong>Customer:</strong> customer@homeshoppie.com / password123
-                </p>
-              </div>
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-sm text-gray-600">
-                  <strong>Admin:</strong> admin@homeshoppie.com / admin123
-                </p>
-              </div>
-            </div>
-          </div>
-
           {/* Trust signals */}
           <div className="mt-6 text-center">
             <div className="text-xs text-gray-500 space-y-1">
