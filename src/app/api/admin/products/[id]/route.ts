@@ -6,7 +6,7 @@ interface ProductResponse {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   images: string[]
   categoryId: string
   stock: number
@@ -16,7 +16,7 @@ interface ProductResponse {
   tags: string[]
 }
 
-export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await auth()
 
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       tags: product.tags,
       unit: product.weightUnit,
       weight: product.weight || 0,
-      compareAt: product.compareAtPrice
+      compareAtPrice: product.compareAtPrice
     }
 
     return NextResponse.json(productRes)
@@ -73,6 +73,178 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 // PATCH update product
+// export async function PATCH(
+//   request: NextRequest,
+//   { params }: { params: Promise<{ id: string }> }
+// ) {
+//   try {
+//     const session = await auth()
+
+//     if (!session?.user?.id || session.user.role !== 'ADMIN') {
+//       return NextResponse.json(
+//         { error: 'Unauthorized' },
+//         { status: 401 }
+//       )
+//     }
+
+//     const { id: productId } = await params
+//     const body = await request.json()
+    
+//     // Handle both simple status updates and full product updates
+//     const {
+//       name,
+//       description,
+//       price,
+//       compareAtPrice,
+//       stock,
+//       weight,
+//       unit,
+//       tags,
+//       categoryId,
+//       isActive,
+//       images
+//     } = body
+
+//     const updateData: any = {}
+
+//     // Full product update (from edit page)
+//     if (name !== undefined) {
+//       if (!name.trim()) {
+//         return NextResponse.json(
+//           { error: 'Product name is required' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.name = name.trim()
+//       // Generate slug from name
+//       updateData.slug = name
+//         .toLowerCase()
+//         .replace(/[^\w\s-]/g, '')
+//         .replace(/[\s_-]+/g, '-')
+//         .replace(/^-+|-+$/g, '')
+//     }
+
+//     if (description !== undefined) {
+//       if (!description.trim()) {
+//         return NextResponse.json(
+//           { error: 'Product description is required' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.description = description.trim()
+//     }
+
+//     if (price !== undefined) {
+//       if (typeof price !== 'number' || price <= 0) {
+//         return NextResponse.json(
+//           { error: 'Price must be greater than 0' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.price = price
+//     }
+
+//     if (compareAtPrice !== undefined) {
+//       updateData.compareAtPrice = compareAtPrice || null
+//     }
+
+//     if (stock !== undefined) {
+//       if (typeof stock !== 'number' || stock < 0) {
+//         return NextResponse.json(
+//           { error: 'Stock cannot be negative' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.stock = stock
+//     }
+
+//     if (weight !== undefined) {
+//       updateData.weight = weight || null
+//     }
+
+//     if (unit !== undefined) {
+//       updateData.weightUnit = unit || null
+//     }
+
+//     if (tags !== undefined) {
+//       if (!Array.isArray(tags)) {
+//         return NextResponse.json(
+//           { error: 'Tags must be an array' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.tags = tags
+//     }
+
+//     if (categoryId !== undefined) {
+//       if (!categoryId) {
+//         return NextResponse.json(
+//           { error: 'Category is required' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.categoryId = categoryId
+//     }
+
+//     if (isActive !== undefined) {
+//       updateData.isActive = Boolean(isActive)
+//     }
+
+//     if (images !== undefined) {
+//       if (!Array.isArray(images)) {
+//         return NextResponse.json(
+//           { error: 'Images must be an array' },
+//           { status: 400 }
+//         )
+//       }
+//       updateData.images = images
+//     }
+
+//     // Update timestamp
+//     updateData.updatedAt = new Date()
+
+//     const updatedProduct = await prisma.product.update({
+//       where: { id: productId },
+//       data: updateData,
+//       include: {
+//         category: {
+//           select: {
+//             id: true,
+//             name: true
+//           }
+//         }
+//       }
+//     })
+
+//     return NextResponse.json(updatedProduct)
+//   } catch (error) {
+//     console.error('Error updating product:', error)
+    
+//     // Handle Prisma errors
+//     if (error instanceof Error) {
+//       if (error.message.includes('Record to update not found')) {
+//         return NextResponse.json(
+//           { error: 'Product not found' },
+//           { status: 404 }
+//         )
+//       }
+//       if (error.message.includes('Unique constraint failed')) {
+//         return NextResponse.json(
+//           { error: 'Product with this name already exists' },
+//           { status: 400 }
+//         )
+//       }
+//     }
+    
+//     return NextResponse.json(
+//       { error: 'Internal server error' },
+//       { status: 500 }
+//     )
+//   }
+// }
+
+// PATCH update product
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -81,164 +253,138 @@ export async function PATCH(
     const session = await auth()
 
     if (!session?.user?.id || session.user.role !== 'ADMIN') {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { id: productId } = await params
     const body = await request.json()
     
-    // Handle both simple status updates and full product updates
     const {
-      name,
-      description,
-      price,
-      compareAt,
-      stock,
-      weight,
-      unit,
-      tags,
-      categoryId,
-      isActive,
-      images
+      name, description, price, compareAtPrice, stock,
+      weight, unit, tags, categoryId, isActive, images
     } = body
 
     const updateData: any = {}
 
-    // Full product update (from edit page)
+    // Validation (Kept identical to your current code)
     if (name !== undefined) {
-      if (!name.trim()) {
-        return NextResponse.json(
-          { error: 'Product name is required' },
-          { status: 400 }
-        )
-      }
+      if (!name.trim()) return NextResponse.json({ error: 'Product name is required' }, { status: 400 })
       updateData.name = name.trim()
-      // Generate slug from name
-      updateData.slug = name
-        .toLowerCase()
-        .replace(/[^\w\s-]/g, '')
-        .replace(/[\s_-]+/g, '-')
-        .replace(/^-+|-+$/g, '')
+      updateData.slug = name.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '')
     }
-
     if (description !== undefined) {
-      if (!description.trim()) {
-        return NextResponse.json(
-          { error: 'Product description is required' },
-          { status: 400 }
-        )
-      }
+      if (!description.trim()) return NextResponse.json({ error: 'Description required' }, { status: 400 })
       updateData.description = description.trim()
     }
-
     if (price !== undefined) {
-      if (typeof price !== 'number' || price <= 0) {
-        return NextResponse.json(
-          { error: 'Price must be greater than 0' },
-          { status: 400 }
-        )
-      }
+      if (typeof price !== 'number' || price <= 0) return NextResponse.json({ error: 'Price must be > 0' }, { status: 400 })
       updateData.price = price
     }
-
-    if (compareAt !== undefined) {
-      updateData.compareAtPrice = compareAt || null
-    }
-
+    if (compareAtPrice !== undefined) updateData.compareAtPrice = compareAtPrice || null
     if (stock !== undefined) {
-      if (typeof stock !== 'number' || stock < 0) {
-        return NextResponse.json(
-          { error: 'Stock cannot be negative' },
-          { status: 400 }
-        )
-      }
+      if (typeof stock !== 'number' || stock < 0) return NextResponse.json({ error: 'Stock cannot be negative' }, { status: 400 })
       updateData.stock = stock
     }
-
-    if (weight !== undefined) {
-      updateData.weight = weight || null
-    }
-
-    if (unit !== undefined) {
-      updateData.weightUnit = unit || null
-    }
-
+    if (weight !== undefined) updateData.weight = weight || null
+    if (unit !== undefined) updateData.weightUnit = unit || null
     if (tags !== undefined) {
-      if (!Array.isArray(tags)) {
-        return NextResponse.json(
-          { error: 'Tags must be an array' },
-          { status: 400 }
-        )
-      }
+      if (!Array.isArray(tags)) return NextResponse.json({ error: 'Tags must be array' }, { status: 400 })
       updateData.tags = tags
     }
-
     if (categoryId !== undefined) {
-      if (!categoryId) {
-        return NextResponse.json(
-          { error: 'Category is required' },
-          { status: 400 }
-        )
-      }
+      if (!categoryId) return NextResponse.json({ error: 'Category required' }, { status: 400 })
       updateData.categoryId = categoryId
     }
-
-    if (isActive !== undefined) {
-      updateData.isActive = Boolean(isActive)
-    }
-
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive)
+    
     if (images !== undefined) {
-      if (!Array.isArray(images)) {
-        return NextResponse.json(
-          { error: 'Images must be an array' },
-          { status: 400 }
-        )
-      }
+      if (!Array.isArray(images)) return NextResponse.json({ error: 'Images must be array' }, { status: 400 })
       updateData.images = images
     }
 
-    // Update timestamp
     updateData.updatedAt = new Date()
 
+    // 1. Update the Product
     const updatedProduct = await prisma.product.update({
       where: { id: productId },
       data: updateData,
       include: {
-        category: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
+        category: { select: { id: true, name: true } }
       }
     })
+
+    // 2. NEW: Sync images to the Image collection if images were modified
+    if (images !== undefined) {
+      try {
+        const validUrls = images.filter((url: string) => !url.includes('dummy'))
+        const newServiceIds: string[] = []
+
+        // Link new/existing images
+        for (let i = 0; i < validUrls.length; i++) {
+          const url = validUrls[i]
+          
+          let serviceImageId = url
+          if (url.includes('/api/public/images/')) {
+            serviceImageId = url.replace('/api/public/images/', '').split('?')[0]
+          } else if (url.includes('/api/admin/images/')) {
+            serviceImageId = url.replace('/api/admin/images/', '').split('?')[0]
+          }
+
+          newServiceIds.push(serviceImageId)
+
+          await prisma.image.upsert({
+            where: { serviceImageId },
+            update: { 
+              productId: productId,
+              alt: `${updatedProduct.name} - Image ${i + 1}`
+            },
+            create: {
+              serviceImageId,
+              filename: `product-${productId.slice(-5)}-${i}`,
+              originalName: `${updatedProduct.name} - Image ${i + 1}`,
+              mimeType: 'image/jpeg',
+              fileSize: '0',
+              serviceUrl: url,
+              publicUrl: url.startsWith('/api') ? url : `/api/public/images/${serviceImageId}`,
+              category: 'product',
+              alt: `${updatedProduct.name} product image`,
+              productId: productId,
+              uploadedBy: session.user.id,
+              uploadedByEmail: session.user.email || 'admin@homeshoppie.com',
+            }
+          })
+        }
+
+        // Unlink removed images (turns them into "Orphans" in Media Library)
+        if (newServiceIds.length > 0) {
+           await prisma.image.updateMany({
+             where: {
+               productId: productId,
+               serviceImageId: { notIn: newServiceIds }
+             },
+             data: { productId: null }
+           })
+        } else {
+           // If array is totally empty now, unlink all
+           await prisma.image.updateMany({
+             where: { productId: productId },
+             data: { productId: null }
+           })
+        }
+
+      } catch (imageSyncError) {
+        console.error('Failed to sync images to Image collection:', imageSyncError)
+      }
+    }
 
     return NextResponse.json(updatedProduct)
   } catch (error) {
     console.error('Error updating product:', error)
-    
-    // Handle Prisma errors
     if (error instanceof Error) {
-      if (error.message.includes('Record to update not found')) {
-        return NextResponse.json(
-          { error: 'Product not found' },
-          { status: 404 }
-        )
-      }
-      if (error.message.includes('Unique constraint failed')) {
-        return NextResponse.json(
-          { error: 'Product with this name already exists' },
-          { status: 400 }
-        )
-      }
+      if (error.message.includes('Record to update not found')) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+      if (error.message.includes('Unique constraint failed')) return NextResponse.json({ error: 'Product name exists' }, { status: 400 })
     }
-    
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
+

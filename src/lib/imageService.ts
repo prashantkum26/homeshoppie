@@ -74,7 +74,7 @@ class ImageServiceClient {
   private authToken: string | null = null
 
   constructor() {
-    this.baseUrl = process.env.NEXT_PUBLIC_IMAGE_SERVICE_URL || 'http://localhost:3001/api'
+    this.baseUrl = process.env.IMAGE_SERVICE_URL || 'http://localhost:3000/api'
   }
 
   setAuthToken(token: string) {

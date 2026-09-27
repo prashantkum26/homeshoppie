@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { Prisma } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
 
     // Search Orders (user's own orders or admin can see all)
     if (session && (!type || type === 'all' || type === 'orders')) {
-      const whereCondition = session.user.role === 'ADMIN' 
+      const whereCondition: Prisma.OrderWhereInput = session.user.role === 'ADMIN' 
         ? {
             OR: [
               { orderNumber: { contains: searchTerm, mode: 'insensitive' } },

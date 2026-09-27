@@ -1,10 +1,9 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
   MagnifyingGlassIcon,
-  AdjustmentsHorizontalIcon,
   ChevronDownIcon,
   ShoppingCartIcon
 } from '@heroicons/react/24/outline'
@@ -18,7 +17,7 @@ interface Product {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   discountPercent: number
   stock: number
   inStock: boolean
@@ -370,9 +369,9 @@ export default function ProductsPage() {
                       <span className="text-lg font-bold text-gray-900">
                         ₹{product.price}
                       </span>
-                      {product.compareAt && (
+                      {product.compareAtPrice && (
                         <span className="text-sm text-gray-500 line-through">
-                          ₹{product.compareAt}
+                          ₹{product.compareAtPrice}
                         </span>
                       )}
                     </div>

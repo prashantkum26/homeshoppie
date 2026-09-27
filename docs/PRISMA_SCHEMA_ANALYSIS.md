@@ -230,7 +230,7 @@ model Product {
 ```prisma
 model Product {
   price     Float  // ⚠️ Float precision issues for currency
-  compareAt Float? // ⚠️ Should use Decimal for financial calculations
+  compareAtPrice Float? // ⚠️ Should use Decimal for financial calculations
 }
 ```
 

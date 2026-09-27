@@ -3,7 +3,7 @@ import { auth } from '../../../../../lib/auth'
 import { prisma } from '../../../../../lib/prisma'
 
 // Test endpoint to validate image-product linking
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const session = await auth()
 
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Test endpoint to create a sample product for testing
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const session = await auth()
 

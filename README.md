@@ -285,3 +285,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 mongod --replSet "rs0" --dbpath /data/db --port 27017
 rs.initiate()
+
+
+
+
+db.createUser({
+  user: "homeshoppie",
+  pwd: "Kp26@1995",
+  roles: [
+    { role: "readWrite", db: "homeshoppie" }
+  ]
+})
+
+PS C:\Users\prash> Stop-Service MongoDB
+PS C:\Users\prash> Start-Service MongoDB

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
-import { getSession } from 'next-auth/react'
+// import { getSession } from 'next-auth/react'
 import { getClientIP } from '@/lib/rate-limit'
 import { isValidEmail, isValidPhone } from '@/lib/utils'
 

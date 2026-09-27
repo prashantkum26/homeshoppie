@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
-import ImageUploader from '../../../../components/ImageUploader'
+// import ImageUploader from '../../../../components/ImageUploader'
 
 interface Category {
   id: string
@@ -18,7 +18,7 @@ interface ProductForm {
   name: string
   description: string
   price: number
-  compareAt: number
+  compareAtPrice: number
   stock: number
   weight: number
   unit: string
@@ -41,7 +41,7 @@ export default function NewProductPage() {
     name: '',
     description: '',
     price: 0,
-    compareAt: 0,
+    compareAtPrice: 0,
     stock: 0,
     weight: 0,
     unit: 'KILOGRAMS',
@@ -332,10 +332,10 @@ export default function NewProductPage() {
                   </label>
                   <input
                     type="number"
-                    name="compareAt"
+                    name="compareAtPrice"
                     min="0"
                     step="0.01"
-                    value={formData.compareAt}
+                    value={formData.compareAtPrice}
                     onChange={handleInputChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
                     placeholder="0.00"

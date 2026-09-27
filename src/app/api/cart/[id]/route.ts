@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 // PATCH update cart item quantity
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -17,7 +17,7 @@ export async function PATCH(
       )
     }
 
-    const cartItemId = params.id
+    const cartItemId = (await params).id
     const body = await request.json()
     const { quantity } = body
 
@@ -82,8 +82,8 @@ export async function PATCH(
 
 // DELETE remove item from cart
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -95,7 +95,7 @@ export async function DELETE(
       )
     }
 
-    const cartItemId = params.id
+    const cartItemId = (await params).id
 
     // Verify cart item belongs to user and delete
     const deletedCartItem = await prisma.cartItem.deleteMany({

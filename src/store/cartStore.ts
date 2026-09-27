@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Product } from '@/types'
-import toast from 'react-hot-toast'
 
 interface CartItem extends Product {
   quantity: number

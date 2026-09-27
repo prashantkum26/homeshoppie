@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useDebounce } from '@/hooks/useDebounce'
-import Link from 'next/link'
 
 interface SearchResult {
   id: string

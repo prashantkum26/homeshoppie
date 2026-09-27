@@ -301,7 +301,7 @@ export default function EnhancedOrdersPage() {
                 {/* Order Items */}
                 <div className="px-6 py-4">
                   <div className="space-y-3">
-                    {order.orderItems.slice(0, 3).map((item, index) => (
+                    {order.orderItems.slice(0, 3).map((item) => (
                       <div key={item.id} className="flex justify-between items-center">
                         <div className="flex-1">
                           <p className="text-sm font-medium text-gray-900">{item.name}</p>

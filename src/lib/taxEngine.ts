@@ -13,7 +13,7 @@ export interface TaxCalculationInput {
   shippingAddress: {
     state: string
     city: string
-    pincode: string
+    postalCode: string
   }
   userId?: string
 }
@@ -103,7 +103,7 @@ export class TaxEngine {
           return (
             shippingAddress.state.toLowerCase().includes(locationLower) ||
             shippingAddress.city.toLowerCase().includes(locationLower) ||
-            shippingAddress.pincode.startsWith(location)
+            shippingAddress.postalCode.startsWith(location)
           )
         })
         
@@ -133,6 +133,7 @@ export class TaxEngine {
   ): number {
     const { subtotal, shippingFee } = input
     
+    console.log("Shipping Fee....::", shippingFee)
     switch (tax.type) {
       case 'PERCENTAGE':
         if (tax.productTypes.length > 0) {
@@ -259,7 +260,7 @@ export class TaxEngine {
       errors.push('Shipping state is required for tax calculation')
     }
     
-    if (!input.shippingAddress.pincode) {
+    if (!input.shippingAddress.postalCode) {
       warnings.push('Pincode not provided - some location-specific taxes may not apply')
     }
     
@@ -359,7 +360,7 @@ export async function calculateOrderTax(orderData: {
   shippingAddress: {
     state: string
     city: string
-    pincode: string
+    postalCode: string
   }
   userId?: string
 }): Promise<TaxCalculationResult> {

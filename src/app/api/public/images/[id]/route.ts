@@ -116,24 +116,24 @@ function getSizeDimensions(size?: string) {
 }
 
 // Check if image is a public product image
-function isPublicProductImage(imageData: any): boolean {
-  try {
-    // Check if it's a product image
-    const isProductImage = imageData.category === 'product' || 
-                          imageData.entityType === 'product' ||
-                          (imageData.metadata && imageData.metadata.sourceApp === 'homeshoppie')
+// function isPublicProductImage(imageData: any): boolean {
+//   try {
+//     // Check if it's a product image
+//     const isProductImage = imageData.category === 'product' || 
+//                           imageData.entityType === 'product' ||
+//                           (imageData.metadata && imageData.metadata.sourceApp === 'homeshoppie')
 
-    // Check if it's marked as public (default true for product images)
-    const isPublic = imageData.isPublic !== false // Default to true if not explicitly set
+//     // Check if it's marked as public (default true for product images)
+//     const isPublic = imageData.isPublic !== false // Default to true if not explicitly set
 
-    // Additional security: check if it has product metadata
-    const hasProductMetadata = imageData.productId || 
-                              (imageData.tags && imageData.tags.includes('product')) ||
-                              (imageData.metadata && imageData.metadata.productId)
+//     // Additional security: check if it has product metadata
+//     const hasProductMetadata = imageData.productId || 
+//                               (imageData.tags && imageData.tags.includes('product')) ||
+//                               (imageData.metadata && imageData.metadata.productId)
 
-    return isProductImage && isPublic && hasProductMetadata
-  } catch (error) {
-    console.error('Error checking image accessibility:', error)
-    return false // Deny access if we can't verify
-  }
-}
+//     return isProductImage && isPublic && hasProductMetadata
+//   } catch (error) {
+//     console.error('Error checking image accessibility:', error)
+//     return false // Deny access if we can't verify
+//   }
+// }

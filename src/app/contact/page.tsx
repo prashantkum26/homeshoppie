@@ -158,16 +158,16 @@ export default function ContactPage() {
     }
   ]
 
-  const subjects = [
-    'General Inquiry',
-    'Product Question',
-    'Order Support',
-    'Bulk Orders',
-    'Partnership',
-    'Feedback',
-    'Technical Issue',
-    'Other'
-  ]
+  // const subjects = [
+  //   'General Inquiry',
+  //   'Product Question',
+  //   'Order Support',
+  //   'Bulk Orders',
+  //   'Partnership',
+  //   'Feedback',
+  //   'Technical Issue',
+  //   'Other'
+  // ]
 
   if (submitted) {
     return (

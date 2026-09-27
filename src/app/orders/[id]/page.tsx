@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { 
   ArrowLeftIcon,
   TruckIcon, 
@@ -44,7 +43,7 @@ interface OrderDetail {
     street: string
     city: string
     state: string
-    pincode: string
+    postalCode: string
   }
 }
 
@@ -454,7 +453,7 @@ export default function OrderDetailsPage() {
                   <p>{order.address.phone}</p>
                   <p className="mt-1">{order.address.street}</p>
                   <p>{order.address.city}, {order.address.state}</p>
-                  <p>{order.address.pincode}</p>
+                  <p>{order.address.postalCode}</p>
                 </div>
               </div>
             </div>

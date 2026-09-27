@@ -3,10 +3,10 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession, signOut } from 'next-auth/react'
-import { 
-  ShoppingCartIcon, 
-  UserIcon, 
-  Bars3Icon, 
+import {
+  ShoppingCartIcon,
+  UserIcon,
+  Bars3Icon,
   XMarkIcon,
   HeartIcon
 } from '@heroicons/react/24/outline'
@@ -30,36 +30,29 @@ const navigation: NavigationItem[] = [
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false)
-  const [isClient, setIsClient] = useState<boolean>(false)
   const [totalItems, setTotalItems] = useState<number>(0)
   const [wishlistCount, setWishlistCount] = useState<number>(0)
   const { data: session } = useSession()
-  
+
   // Store references for subscriptions
   const cartStore = useCartStore()
   const wishlistStore = useWishlistStore()
-  
+
   useEffect(() => {
-    setIsClient(true)
-    
-    // Only update counts after client-side hydration to prevent hydration mismatch
-    if (typeof window !== 'undefined') {
-      setTotalItems(cartStore.getTotalItems())
-      setWishlistCount(wishlistStore.getWishlistCount())
-      
-      // Subscribe to store changes
-      const unsubscribeCart = useCartStore.subscribe((state) => {
-        setTotalItems(state.getTotalItems())
-      })
-      
-      const unsubscribeWishlist = useWishlistStore.subscribe((state) => {
-        setWishlistCount(state.getWishlistCount())
-      })
-      
-      return () => {
-        unsubscribeCart()
-        unsubscribeWishlist()
-      }
+    setTotalItems(cartStore.getTotalItems())
+    setWishlistCount(wishlistStore.getWishlistCount())
+
+    const unsubscribeCart = useCartStore.subscribe((state) => {
+      setTotalItems(state.getTotalItems())
+    })
+
+    const unsubscribeWishlist = useWishlistStore.subscribe((state) => {
+      setWishlistCount(state.getWishlistCount())
+    })
+
+    return () => {
+      unsubscribeCart()
+      unsubscribeWishlist()
     }
   }, [cartStore, wishlistStore])
 
@@ -67,16 +60,20 @@ export default function Header() {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element
+
       if (userMenuOpen && !target.closest('.user-menu-container')) {
         setUserMenuOpen(false)
       }
     }
 
-    if (userMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-      }
+    if (!userMenuOpen) {
+      return
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [userMenuOpen])
 
@@ -123,7 +120,7 @@ export default function Header() {
 
           {/* Search Bar */}
           <div className="hidden md:flex flex-1 max-w-lg mx-8">
-            <SearchBar 
+            <SearchBar
               placeholder="Search products, categories..."
               className="w-full"
             />
@@ -255,7 +252,7 @@ export default function Header() {
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
               {/* Mobile Search */}
               <div className="px-3 py-2">
-                <SearchBar 
+                <SearchBar
                   placeholder="Search products..."
                   className="w-full"
                   isMobile={true}

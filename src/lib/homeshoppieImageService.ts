@@ -72,8 +72,10 @@ class HomeshoppieImageService {
         })
       })
 
-      const result = await response.json()
-      
+      const result = await response.json();
+
+      console.log(result)
+
       if (result.success) {
         this.accessToken = result.data.accessToken
         // JWT tokens expire in 24 hours by default
@@ -106,24 +108,27 @@ class HomeshoppieImageService {
 
     try {
       const formData = new FormData()
-      
+
       // Add the image file
       if (file instanceof File) {
         formData.append('image', file)
       } else {
-        // Handle Buffer (for server-side uploads)
-        formData.append('image', new Blob([file]), 'image.jpg')
+        const arrayBuffer = new ArrayBuffer(file.byteLength)
+        new Uint8Array(arrayBuffer).set(file)
+
+        const blob = new Blob([arrayBuffer], { type: 'image/jpeg' })
+        formData.append('image', blob, 'image.jpg')
       }
 
       // Add optional metadata
       formData.append('isPublic', options.isPublic !== false ? 'true' : 'false')
       formData.append('alt', options.alt || '')
       formData.append('title', options.title || '')
-      
+
       if (options.tags) {
         formData.append('tags', JSON.stringify(options.tags))
       }
-      
+
       if (options.category) {
         formData.append('category', options.category)
       }
@@ -137,7 +142,7 @@ class HomeshoppieImageService {
       }
 
       console.log('📤 Uploading to:', `${this.baseUrl}/api/images/upload`)
-      
+
       const response = await fetch(`${this.baseUrl}/api/images/upload`, {
         method: 'POST',
         headers: {
@@ -152,21 +157,21 @@ class HomeshoppieImageService {
 
       const result = await response.json()
       console.log('📥 Upload response:', JSON.stringify(result, null, 2))
-      
+
       if (result.success) {
         // Handle different possible response structures
         const imageData = result.data?.image || result.data || result.image
-        
+
         if (!imageData) {
           throw new Error('Invalid response structure: no image data found')
         }
-        
+
         // Normalize the response structure to match our interface
         const normalizedData: ImageUploadResult = {
           id: imageData.imageId || imageData.id,
           filename: imageData.filename || imageData.originalName,
           url: imageData.url || imageData.accessUrl,
-          publicUrl: imageData.publicUrl || imageData.publicUrls?.original || `/api/public/images/${imageData.imageId || imageData.id}`,
+          publicUrl: imageData.publicUrl || `/api/public/images/${imageData.imageId}`,
           size: imageData.size,
           mimeType: imageData.mimeType || imageData.mimetype,
           alt: imageData.alt,
@@ -175,8 +180,8 @@ class HomeshoppieImageService {
           isPublic: imageData.isPublic,
           createdAt: imageData.createdAt || imageData.uploadedAt || new Date().toISOString()
         }
-        
-        console.log('✅ Image uploaded successfully:', normalizedData.filename)
+
+        console.log('✅ Image uploaded successfully:', normalizedData)
         return normalizedData
       } else {
         const errorMsg = result.error || result.message || 'Unknown upload error'
@@ -185,12 +190,12 @@ class HomeshoppieImageService {
       }
     } catch (error) {
       console.error('❌ Upload error:', error)
-      
+
       // Provide more specific error messages
       if (error instanceof TypeError && error.message.includes('filename')) {
         throw new Error('Upload response format error - please check image service compatibility')
       }
-      
+
       throw error
     }
   }
@@ -211,7 +216,7 @@ class HomeshoppieImageService {
 
     try {
       const params = new URLSearchParams()
-      
+
       if (options.page) params.append('page', options.page.toString())
       if (options.limit) params.append('limit', options.limit.toString())
       if (options.tags) params.append('tags', options.tags)
@@ -221,13 +226,13 @@ class HomeshoppieImageService {
       if (options.productId) params.append('productId', options.productId)
 
       const url = `${this.baseUrl}/api/images?${params.toString()}`
-      
+
       const response = await fetch(url, {
         headers: { 'Authorization': `Bearer ${this.accessToken}` }
       })
 
       const result = await response.json()
-      
+
       if (result.success) {
         console.log(`✅ Retrieved ${result.data.images.length} images`)
         return result.data
@@ -271,7 +276,7 @@ class HomeshoppieImageService {
       }
 
       const result = await response.json()
-      
+
       if (result.success) {
         console.log('✅ Image metadata retrieved:', result.data.image?.filename || imageId)
         return result.data.image || result.data
@@ -281,7 +286,7 @@ class HomeshoppieImageService {
       }
     } catch (error) {
       console.error('❌ Get image error:', error)
-      
+
       // If metadata fetch fails, return a safe fallback
       if (error instanceof SyntaxError && error.message.includes('JSON')) {
         console.log('📝 Creating fallback metadata for image:', imageId)
@@ -297,7 +302,7 @@ class HomeshoppieImageService {
           category: 'product'
         }
       }
-      
+
       throw error
     }
   }
@@ -315,7 +320,7 @@ class HomeshoppieImageService {
       })
 
       const result = await response.json()
-      
+
       if (result.success) {
         console.log('✅ Image deleted successfully')
         return true
@@ -341,7 +346,7 @@ class HomeshoppieImageService {
       })
 
       const result = await response.json()
-      
+
       if (result.success) {
         return result.data.application.usage
       } else {
@@ -359,7 +364,7 @@ class HomeshoppieImageService {
       throw new Error('Authentication failed')
     }
 
-    console.log("Get Image....::",{
+    console.log("Get Image....::", {
       imageId,
       size
     })

@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { calculateOrderTax } from '@/lib/taxEngine'
 
 // GET user orders
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const session = await auth()
 
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { items, shippingAddress, billingAddress, paymentMethod, notes, shippingFee = 0 } = body
+    const { items, shippingAddress, paymentMethod, notes, shippingFee = 0 } = body
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
       shippingAddress: {
         state: shippingAddress.state,
         city: shippingAddress.city || '',
-        pincode: shippingAddress.postalCode || ''
+        postalCode: shippingAddress.postalCode || ''
       },
       userId: session.user.id
     })

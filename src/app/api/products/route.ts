@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import type { PaginatedResponse, Product } from '@/types'
+import type { PaginatedResponse } from '@/types'
 
 interface ProductWithCategory {
   id: string
@@ -8,7 +8,7 @@ interface ProductWithCategory {
   slug: string
   description: string | null
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   originalPrice: number | null
   stock: number
   sku: string | null
@@ -107,7 +107,7 @@ export async function GET(request: NextRequest): Promise<NextResponse<PaginatedR
       description: product.description,
       price: product.price,
       originalPrice: product.compareAtPrice,
-      compareAt: product.compareAtPrice,
+      compareAtPrice: product.compareAtPrice,
       stock: product.stock,
       images: product.images,
       categoryId: product.categoryId,

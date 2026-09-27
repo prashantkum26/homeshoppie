@@ -90,7 +90,7 @@ async function main() {
       warning('No environment file found. Creating .env.example as reference...');
       
       const envExample = `# Database
-DATABASE_URL="mongodb://localhost:27017/homeshoppie"
+DATABASE_URL='mongodb://homeshoppie:Kp26%401995@localhost:27017/homeshoppie?authSource=admin'
 
 # NextAuth.js
 NEXTAUTH_SECRET="your-nextauth-secret-key-here"

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Rate limiting check
-    const rateLimit = await checkRateLimit(req, '/api/razorpay/verify', session.user.id);
+    const rateLimit = await checkRateLimit(ipAddress, '/api/razorpay/verify', session.user.id);
     if (!rateLimit.allowed) {
       await logSecurityEvent({
         userId: session.user.id,

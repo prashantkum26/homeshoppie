@@ -90,7 +90,7 @@ totalAmount: Float → totalAmount: Decimal
 const product = await prisma.product.create({
   data: {
     price: 99.99,           // ❌ Float precision issues
-    compareAt: 149.99       // ❌ Float precision issues
+    compareAtPrice 149.99       // ❌ Float precision issues
   }
 });
 
@@ -438,7 +438,7 @@ async function migrateToNewSchema() {
       where: { id: product.id },
       data: {
         price: new Decimal(product.price.toString()),
-        compareAtPrice: product.compareAt ? new Decimal(product.compareAt.toString()) : null
+        compareAtPrice: product.compareAtPrice ? new Decimal(product.compareAtPrice.toString()) : null
       }
     });
   }

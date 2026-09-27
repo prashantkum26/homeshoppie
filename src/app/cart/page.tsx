@@ -1,9 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import useCartStore from '@/store/cartStore'
@@ -13,7 +12,7 @@ export default function CartPage() {
   const { data: session } = useSession()
   const router = useRouter()
   const { items, updateQuantity, removeItem, clearCart, getTotal, getTotalItems } = useCartStore()
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, _setIsLoading] = useState(false)
 
   const handleQuantityChange = (productId: string, newQuantity: number) => {
     if (newQuantity < 1) {
@@ -123,9 +122,9 @@ export default function CartPage() {
                   <p className="mt-1 text-sm text-gray-500 line-clamp-2">
                     {item.description}
                   </p>
-                  {item.weight && item.unit && (
+                  {item.weight && item.weightUnit && (
                     <p className="mt-1 text-sm text-gray-500">
-                      Weight: {item.weight} {item.unit}
+                      Weight: {item.weight} {item.weightUnit}
                     </p>
                   )}
                 </div>

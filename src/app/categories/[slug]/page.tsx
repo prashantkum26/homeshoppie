@@ -7,7 +7,6 @@ import {
   HeartIcon, 
   ShoppingCartIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
   Squares2X2Icon,
   ListBulletIcon,
   XMarkIcon,
@@ -23,7 +22,7 @@ interface Product {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   discountPercent: number
   stock: number
   inStock: boolean
@@ -182,9 +181,9 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
                     <span className="text-lg font-bold text-gray-900">
                       ₹{product.price}
                     </span>
-                    {product.compareAt && (
+                    {product.compareAtPrice && (
                       <span className="text-sm text-gray-500 line-through">
-                        ₹{product.compareAt}
+                        ₹{product.compareAtPrice}
                       </span>
                     )}
                     <span className="text-sm text-gray-500">• {displayWeight}</span>
@@ -317,9 +316,9 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
             <span className="text-lg font-bold text-gray-900">
               ₹{product.price}
             </span>
-            {product.compareAt && (
+            {product.compareAtPrice && (
               <span className="text-sm text-gray-500 line-through">
-                ₹{product.compareAt}
+                ₹{product.compareAtPrice}
               </span>
             )}
           </div>
@@ -342,63 +341,87 @@ export default function CategoryPage() {
   const [loading, setLoading] = useState(true)
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 0 })
 
-  const fetchCategoryAndProducts = async () => {
+  useEffect(() => {
+  let cancelled = false
+
+  const fetchData = async () => {
     setLoading(true)
+
     try {
-      // Fetch category details
       const categoryResponse = await fetch('/api/categories')
-      if (!categoryResponse.ok) throw new Error('Failed to fetch categories')
-      
+
+      if (!categoryResponse.ok) {
+        throw new Error('Failed to fetch categories')
+      }
+
       const categoryResult = await categoryResponse.json()
-      // Handle the wrapped API response
       const categories = categoryResult.success ? categoryResult.data : []
-      const foundCategory = categories.find((cat: Category) => cat.slug === slug)
-      
+
+      const foundCategory = categories.find(
+        (cat: Category) => cat.slug === slug
+      )
+
       if (!foundCategory) {
         notFound()
         return
       }
-      
+
+      if (cancelled) return
+
       setCategory(foundCategory)
 
-      // Fetch products for this category
-      const params = new URLSearchParams({
+      const queryParams = new URLSearchParams({
         page: '1',
         limit: '50',
         categorySlug: slug as string,
         sortBy: sortBy.split('-')[0],
         sortOrder: sortBy.includes('-desc') ? 'desc' : 'asc',
         ...(searchQuery && { search: searchQuery }),
-        ...(onlyInStock && { inStockOnly: 'true' })
+        ...(onlyInStock && { inStockOnly: 'true' }),
       })
 
-      const productsResponse = await fetch(`/api/products?${params}`)
-      if (!productsResponse.ok) throw new Error('Failed to fetch products')
-      
+      const productsResponse = await fetch(
+        `/api/products?${queryParams}`
+      )
+
+      if (!productsResponse.ok) {
+        throw new Error('Failed to fetch products')
+      }
+
       const data = await productsResponse.json()
+
+      if (cancelled) return
+
       setProducts(data.data || [])
-      setPagination(data.pagination || { page: 1, total: 0, pages: 0 })
+      setPagination(
+        data.pagination || {
+          page: 1,
+          total: 0,
+          pages: 0,
+        }
+      )
     } catch (error) {
-      console.error('Error fetching data:', error)
-      toast.error('Failed to load category data')
+      if (!cancelled) {
+        console.error('Error fetching data:', error)
+        toast.error('Failed to load category data')
+      }
     } finally {
-      setLoading(false)
+      if (!cancelled) {
+        setLoading(false)
+      }
     }
   }
 
-  useEffect(() => {
-    fetchCategoryAndProducts()
-  }, [slug])
+  const debounceTimer = setTimeout(
+    fetchData,
+    searchQuery ? 500 : 0
+  )
 
-  useEffect(() => {
-    if (category) {
-      const debounceTimer = setTimeout(() => {
-        fetchCategoryAndProducts()
-      }, searchQuery ? 500 : 0)
-
-      return () => clearTimeout(debounceTimer)
-    }
-  }, [searchQuery, sortBy, onlyInStock])
+  return () => {
+    cancelled = true
+    clearTimeout(debounceTimer)
+  }
+}, [slug, searchQuery, sortBy, onlyInStock])
 
   const clearFilters = () => {
     setSearchQuery('')

@@ -78,7 +78,7 @@ export async function GET(
 
 // DEPRECATED: Legacy delete endpoint - Use /api/admin/images/[id] instead
 export async function DELETE(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

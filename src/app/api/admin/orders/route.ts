@@ -37,10 +37,11 @@ export async function GET(request: NextRequest) {
         address: {
           select: {
             name: true,
-            street: true,
+            street1: true,
+            street2: true,
             city: true,
             state: true,
-            pincode: true
+            postalCode: true
           }
         },
         orderItems: true,

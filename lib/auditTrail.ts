@@ -176,8 +176,8 @@ export async function updateProductWithLogging(
   if (updateData.price !== undefined) {
     updateData.price = toCurrencyUnit(updateData.price);
   }
-  if (updateData.compareAt !== undefined) {
-    updateData.compareAt = toCurrencyUnit(updateData.compareAt);
+  if (updateData.compareAtPrice !== undefined) {
+    updateData.compareAtPrice = toCurrencyUnit(updateData.compareAtPrice);
   }
 
   // Update product
@@ -195,13 +195,13 @@ export async function updateProductWithLogging(
     {
       oldValues: {
         price: fromCurrencyUnit(oldProduct.price),
-        compareAt: oldProduct.compareAt ? fromCurrencyUnit(oldProduct.compareAt) : null,
+        compareAtPrice: oldProduct.compareAtPrice ? fromCurrencyUnit(oldProduct.compareAtPrice) : null,
         stock: oldProduct.stock,
         isActive: oldProduct.isActive
       },
       newValues: {
         price: fromCurrencyUnit(updatedProduct.price),
-        compareAt: updatedProduct.compareAt ? fromCurrencyUnit(updatedProduct.compareAt) : null,
+        compareAtPrice: updatedProduct.compareAtPrice ? fromCurrencyUnit(updatedProduct.compareAtPrice) : null,
         stock: updatedProduct.stock,
         isActive: updatedProduct.isActive
       }

@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
         filename: 'test-image.jpg',
         originalName: 'test-image.jpg',
         mimeType: 'image/jpeg',
-        size: 12345,
+        fileSize: '12345',
         isPublic: true,
         serviceUrl: 'http://test.com/image.jpg',
         publicUrl: `/api/public/images/test-${Date.now()}`,

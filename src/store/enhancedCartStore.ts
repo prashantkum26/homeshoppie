@@ -152,7 +152,7 @@ const useEnhancedCartStore = create<EnhancedCartStore>()(
             name: itemToSave.name,
             price: itemToSave.price,
             quantity: itemToSave.quantity,
-            images: itemToSave.images
+            ...(itemToSave.images !== undefined ? { images: itemToSave.images } : {}),
           }
           
           // Remove from cart and add to saved

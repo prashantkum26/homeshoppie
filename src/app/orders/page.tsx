@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { 
   EyeIcon, 
   TruckIcon, 
@@ -35,7 +34,7 @@ interface Order {
     street: string
     city: string
     state: string
-    pincode: string
+    postalCode: string
   }
 }
 
@@ -337,7 +336,7 @@ export default function OrdersPage() {
                   <div className="border-t mt-4 pt-4">
                     <p className="text-sm text-gray-500 mb-1">Delivery Address</p>
                     <p className="text-sm text-gray-900">
-                      {order.address.name}, {order.address.street}, {order.address.city}, {order.address.state} - {order.address.pincode}
+                      {order.address.name}, {order.address.street}, {order.address.city}, {order.address.state} - {order.address.postalCode}
                     </p>
                   </div>
 

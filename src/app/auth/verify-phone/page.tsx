@@ -5,9 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { 
-  DevicePhoneMobileIcon, 
-  CheckCircleIcon,
-  ExclamationCircleIcon,
+  DevicePhoneMobileIcon,
   ArrowPathIcon
 } from '@heroicons/react/24/outline'
 import Button from '@/components/ui/Button'

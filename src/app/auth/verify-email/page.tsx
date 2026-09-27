@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
@@ -13,7 +13,7 @@ import {
 import Button from '@/components/ui/Button'
 import toast from 'react-hot-toast'
 
-export default function VerifyEmailPage() {
+function VerifyEmailContent() {
   const { data: session, status, update } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -279,5 +279,23 @@ export default function VerifyEmailPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+
+export default function VerifyEmailPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <ArrowPathIcon className="h-8 w-8 animate-spin text-primary-600 mx-auto mb-4" />
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <VerifyEmailContent />
+    </Suspense>
   )
 }

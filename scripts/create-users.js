@@ -15,7 +15,9 @@ async function createUsers() {
         name: 'Admin User',
         passwordHash: adminPasswordHash,
         role: 'ADMIN',
-        phone: '+91 98765 43210'
+        phone: '+91 98765 43210',
+        emailVerified: new Date(),
+        phoneVerified: new Date()
       }
     })
 
@@ -27,7 +29,9 @@ async function createUsers() {
         name: 'Test Customer',
         passwordHash: customerPasswordHash,
         role: 'USER',
-        phone: '+91 98765 43211'
+        phone: '+91 98765 43211',
+        emailVerified: new Date(),
+        phoneVerified: new Date()
       }
     })
 

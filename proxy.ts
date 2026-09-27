@@ -76,12 +76,12 @@ export default async function proxy(request: NextRequest) {
   const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
   
   // Verification routes (allow access without full verification)
-  const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
-  const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
+  // const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
+  // const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
   
   // Auth routes (login, signup, etc.)
-  const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
-  const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
+  // const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
+  // const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
   
   if (isProtectedRoute) {
     console.log(`🔐 Protected route detected: ${pathname}`)

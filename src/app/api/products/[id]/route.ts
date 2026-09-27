@@ -10,7 +10,7 @@ interface TransformedProduct {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   images: string[]
   categoryId: string
   stock: number
@@ -68,7 +68,7 @@ export async function GET(
     // Transform product to include computed fields
     const transformedProduct: TransformedProduct = {
       ...product,
-      compareAt: product.compareAtPrice,
+      compareAtPrice: product.compareAtPrice,
       inStock: product.stock > 0,
       discountPercent: product.compareAtPrice 
         ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)

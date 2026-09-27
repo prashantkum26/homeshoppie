@@ -11,6 +11,8 @@ const emailConfig = {
   },
 }
 
+console.log("Config....::", emailConfig);
+
 // Create transporter
 const transporter = nodemailer.createTransport(emailConfig)
 

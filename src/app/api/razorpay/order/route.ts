@@ -7,8 +7,8 @@ import {
   checkEnhancedRateLimit, 
   getClientIP,
   toCurrencyUnit,
-  fromCurrencyUnit,
-  logPaymentOperation 
+  // fromCurrencyUnit,
+  // logPaymentOperation 
 } from "@/lib/auditTrail";
 
 export async function POST(req: NextRequest) {

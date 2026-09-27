@@ -4,7 +4,7 @@ import { prisma } from '../../../../../../../lib/prisma'
 
 // Get product images - admin only
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -18,15 +18,14 @@ export async function GET(
     }
 
     const { id: productId } = await params
-    
-    // Get product with images
+
     const product = await prisma.product.findUnique({
       where: { id: productId },
       select: {
         id: true,
         name: true,
-        images: true
-      }
+        images: true,
+      },
     })
 
     if (!product) {
@@ -36,47 +35,56 @@ export async function GET(
       )
     }
 
-    // Transform image URLs to include metadata
     const images = product.images.map((url, index) => {
-      // Extract image ID from URL
       let imageId = `image-${index}`
+
       if (url.includes('/api/public/images/')) {
-        imageId = url.replace('/api/public/images/', '').split('?')[0]
+        imageId = url
+          .replace('/api/public/images/', '')
+          .split('?')[0]
       } else if (url.includes('/api/admin/images/')) {
-        imageId = url.replace('/api/admin/images/', '').split('?')[0]
+        imageId = url
+          .replace('/api/admin/images/', '')
+          .split('?')[0]
       }
 
       return {
         id: imageId,
         filename: `product-image-${index + 1}`,
-        url: url,
-        publicUrl: url.startsWith('/api/public/') ? url : `/api/public/images/${imageId}`,
-        size: 0, // Size not tracked in current system
-        mimeType: 'image/jpeg', // Default mime type
+        url,
+        publicUrl: url.startsWith('/api/public/')
+          ? url
+          : `/api/public/images/${imageId}`,
+        size: 0,
+        mimeType: 'image/jpeg',
         alt: `${product.name} - Image ${index + 1}`,
         tags: ['product', 'homeshoppie'],
         category: 'product',
         isPublic: true,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
       }
     })
 
     return NextResponse.json({
       success: true,
-      images: images,
+      images,
       product: {
         id: product.id,
         name: product.name,
-        totalImages: images.length
-      }
+        totalImages: images.length,
+      },
     })
-
   } catch (error) {
     console.error('Error fetching product images:', error)
+
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to fetch product images',
-        details: process.env.NODE_ENV === 'development' ? error : undefined
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Failed to fetch product images',
+        details:
+          process.env.NODE_ENV === 'development' ? error : undefined,
       },
       { status: 500 }
     )

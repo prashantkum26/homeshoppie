@@ -48,7 +48,7 @@ const nextConfig: NextConfig = {
   turbopack: {}, // Empty config to silence Turbopack warnings
   
   // Development and production optimizations
-  webpack: (config: any, { dev, isServer }: any) => {
+  webpack: (config: any, { dev }: any) => {
     if (dev) {
       // Suppress source map warnings in development
       config.devtool = false;

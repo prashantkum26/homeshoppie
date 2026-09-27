@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
           filename: file.name,
           originalName: file.name,
           mimeType: file.type,
-          size: file.size,
+          fileSize: String(file.size),
           width: 800, // Mock dimensions
           height: 600,
           alt: alt || `${category} image - ${title}`,

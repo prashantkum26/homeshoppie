@@ -33,7 +33,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({
   ...props
 }, ref) => {
   const [showPassword, setShowPassword] = useState(false)
-  const [isFocused, setIsFocused] = useState(false)
+  // const [isFocused, setIsFocused] = useState(false)
 
   const isPassword = type === 'password'
   const inputType = isPassword && showPassword ? 'text' : type
@@ -103,11 +103,11 @@ const Input = forwardRef<HTMLInputElement, InputProps>(({
           disabled={disabled}
           required={required}
           onFocus={(e) => {
-            setIsFocused(true)
+            // setIsFocused(true)
             props.onFocus?.(e)
           }}
           onBlur={(e) => {
-            setIsFocused(false)
+            // setIsFocused(false)
             props.onBlur?.(e)
           }}
           {...props}

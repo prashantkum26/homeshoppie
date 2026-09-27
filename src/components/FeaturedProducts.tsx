@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { HeartIcon, ShoppingCartIcon, StarIcon } from '@heroicons/react/24/outline'
+import { HeartIcon, ShoppingCartIcon } from '@heroicons/react/24/outline'
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useCartStore from '@/store/cartStore'
 import toast from 'react-hot-toast'
@@ -14,7 +14,7 @@ interface FeaturedProduct {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   discountPercent: number
   stock: number
   inStock: boolean
@@ -52,8 +52,8 @@ function ProductCard({ product }: ProductCardProps) {
     toast.success(isLiked ? 'Removed from wishlist' : 'Added to wishlist')
   }
 
-  const discountPercent = product.compareAt
-    ? Math.round(((product.compareAt - product.price) / product.compareAt) * 100)
+  const discountPercent = product.compareAtPrice
+    ? Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)
     : 0
 
   return (
@@ -182,9 +182,9 @@ function ProductCard({ product }: ProductCardProps) {
               <span className="text-lg font-bold text-gray-900">
                 ₹{product.price}
               </span>
-              {product.compareAt && (
+              {product.compareAtPrice && (
                 <span className="text-sm text-gray-500 line-through">
-                  ₹{product.compareAt}
+                  ₹{product.compareAtPrice}
                 </span>
               )}
             </div>
@@ -222,9 +222,9 @@ function ProductCard({ product }: ProductCardProps) {
             <span className="text-lg font-bold text-gray-900">
               ₹{product.price}
             </span>
-            {product.compareAt && (
+            {product.compareAtPrice && (
               <span className="text-sm text-gray-500 line-through">
-                ₹{product.compareAt}
+                ₹{product.compareAtPrice}
               </span>
             )}
           </div> */}

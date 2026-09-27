@@ -4,16 +4,19 @@ import { prisma } from '@/lib/prisma'
 import { taxEngine } from '@/lib/taxEngine'
 import { z } from 'zod'
 
-// Validation schema for tax configuration
+// Validation schema for tax configuration (Updated with new fields and enums)
 const TaxConfigSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  type: z.enum(['PERCENTAGE', 'FIXED_AMOUNT', 'GST', 'STATE_TAX', 'CITY_TAX']),
+  type: z.enum(['PERCENTAGE', 'FIXED_AMOUNT', 'GST', 'CGST', 'SGST', 'IGST', 'STATE_TAX', 'CITY_TAX']),
   rate: z.number().min(0, 'Rate must be non-negative'),
   isActive: z.boolean().optional().default(true),
   applicableIn: z.array(z.string()).optional().default([]),
   productTypes: z.array(z.string()).optional().default([]),
-  minAmount: z.number().min(0).optional(),
-  maxAmount: z.number().min(0).optional()
+  minAmount: z.number().nullable().optional(),
+  maxAmount: z.number().nullable().optional(),
+  validFrom: z.string().optional(),
+  validUntil: z.string().nullable().optional(),
+  regulationRef: z.string().nullable().optional()
 })
 
 // GET all tax configurations
@@ -21,12 +24,8 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -52,10 +51,8 @@ export async function GET(request: NextRequest) {
       ]
     })
 
-    return NextResponse.json({
-      taxConfigurations,
-      total: taxConfigurations.length
-    })
+    // Returned directly as an array so the frontend `setTaxes(data)` works perfectly
+    return NextResponse.json(taxConfigurations)
   } catch (error) {
     console.error('Error fetching tax configurations:', error)
     return NextResponse.json(
@@ -70,12 +67,8 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -123,8 +116,12 @@ export async function POST(request: NextRequest) {
         isActive: data.isActive,
         applicableIn: data.applicableIn,
         productTypes: data.productTypes,
-        minAmount: data.minAmount,
-        maxAmount: data.maxAmount
+        minAmount: data.minAmount ?? null,
+        maxAmount: data.maxAmount ?? null,
+        validFrom: data.validFrom ? new Date(data.validFrom) : new Date(),
+        validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        regulationRef: data.regulationRef ?? null,
+        updatedBy: session.user.id
       }
     })
 
@@ -146,12 +143,8 @@ export async function PUT(request: NextRequest) {
   try {
     const session = await auth()
 
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
@@ -166,7 +159,7 @@ export async function PUT(request: NextRequest) {
 
     const updatedConfigurations = await prisma.taxConfiguration.updateMany({
       where: { id: { in: ids } },
-      data: { isActive }
+      data: { isActive, updatedBy: session.user.id }
     })
 
     // Clear tax engine cache

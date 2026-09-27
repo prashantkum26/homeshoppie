@@ -4,11 +4,17 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import toast from 'react-hot-toast'
-import { ArrowLeftIcon, PhotoIcon, TrashIcon } from '@heroicons/react/24/outline'
-import ImageUploader from '../../../../../components/ImageUploader'
-import { imageService } from '../../../../../lib/imageService'
+import { 
+  ArrowLeftIcon, 
+  TagIcon, 
+  CurrencyRupeeIcon, 
+  ArchiveBoxIcon, 
+  PhotoIcon, 
+  HashtagIcon,
+  CheckCircleIcon
+} from '@heroicons/react/24/outline'
+import ImageUploader from '@/components/ImageUploader'
 
 interface Category {
   id: string
@@ -21,7 +27,7 @@ interface Product {
   name: string
   description: string
   price: number
-  compareAt: number | null
+  compareAtPrice: number | null
   stock: number
   weight: number
   unit: string
@@ -47,7 +53,6 @@ export default function EditProductPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingData, setIsLoadingData] = useState(true)
   const [tagInput, setTagInput] = useState('')
-  const [imageUrl, setImageUrl] = useState('')
   
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -56,7 +61,7 @@ export default function EditProductPage() {
     }
 
     if (status === 'authenticated') {
-      if (session?.user?.role !== 'ADMIN') {
+      if (session?.user?.role !== 'ADMIN' && session?.user?.role !== 'SUPER_ADMIN') {
         router.push('/dashboard')
         toast.error('Access denied. Admin privileges required.')
         return
@@ -72,22 +77,20 @@ export default function EditProductPage() {
     try {
       setIsLoadingData(true)
       
-      // Fetch product details
       const productResponse = await fetch(`/api/admin/products/${productId}`)
       if (productResponse.ok) {
         const productData = await productResponse.json()
         setProduct(productData)
       } else {
         toast.error('Product not found')
-        router.push('/admin')
+        router.push('/admin/products')
         return
       }
       
-      // Fetch categories
       const categoriesResponse = await fetch('/api/categories')
       if (categoriesResponse.ok) {
         const categoriesData = await categoriesResponse.json()
-        setCategories(categoriesData?.data);
+        setCategories(categoriesData?.data || categoriesData);
       } else {
         toast.error('Failed to load categories')
       }
@@ -139,35 +142,6 @@ export default function EditProductPage() {
     }))
   }
 
-  const addImage = () => {
-    if (!product || !imageUrl.trim()) return
-    
-    const url = imageUrl.trim()
-    if (product.images.includes(url)) {
-      toast.error('Image URL already exists')
-      return
-    }
-    
-    setProduct(prev => ({
-      ...prev!,
-      images: [...prev!.images, url]
-    }))
-    
-    setImageUrl('')
-    toast.success('Image added successfully')
-  }
-
-  const removeImage = (imageToRemove: string) => {
-    if (!product) return
-    
-    setProduct(prev => ({
-      ...prev!,
-      images: prev!.images.filter(image => image !== imageToRemove)
-    }))
-    
-    toast.success('Image removed successfully')
-  }
-
   const validateForm = () => {
     if (!product) return false
     
@@ -216,7 +190,7 @@ export default function EditProductPage() {
           name: product.name,
           description: product.description,
           price: product.price,
-          compareAt: product.compareAt || null,
+          compareAtPrice: product.compareAtPrice || null,
           stock: product.stock,
           weight: product.weight || null,
           unit: product.unit,
@@ -233,7 +207,7 @@ export default function EditProductPage() {
       }
 
       toast.success('Product updated successfully!')
-      router.push('/admin')
+      router.push('/admin/products')
       
     } catch (error: any) {
       toast.error(error.message || 'Failed to update product')
@@ -244,47 +218,49 @@ export default function EditProductPage() {
 
   if (status === 'loading' || isLoadingData) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600"></div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
       </div>
     )
   }
 
-  if (!session || session.user.role !== 'ADMIN' || !product) {
+  if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'SUPER_ADMIN') || !product) {
     return null
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
+        
+        {/* Header & Back Button */}
         <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-4">
-            <Link
-              href="/admin"
-              className="inline-flex items-center text-gray-500 hover:text-gray-700"
-            >
-              <ArrowLeftIcon className="h-5 w-5 mr-1" />
-              Back to Admin Dashboard
-            </Link>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900">Edit Product</h1>
-          <p className="mt-2 text-gray-600">
-            Update product information and manage images.
+          <Link
+            href="/admin/products"
+            className="inline-flex items-center text-sm font-bold text-gray-500 hover:text-gray-900 mb-3 transition group"
+          >
+            <ArrowLeftIcon className="h-4 w-4 mr-1 group-hover:-translate-x-1 transition-transform" />
+            Back to Product Catalog
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">Edit Product</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Update specifications, pricing, inventory thresholds, and media assets.
           </p>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white shadow-sm rounded-lg">
-          <div className="px-6 py-8 space-y-6">
+        <form onSubmit={handleSubmit} className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
+          <div className="p-8 space-y-8">
             
             {/* Basic Information */}
-            <div className="border-b border-gray-200 pb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Basic Information</h2>
+            <div>
+              <div className="flex items-center space-x-2 border-b pb-3 mb-5">
+                <TagIcon className="h-5 w-5 text-red-600" />
+                <h2 className="text-base font-bold text-gray-900">Basic Information</h2>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                     Product Name *
                   </label>
                   <input
@@ -293,13 +269,13 @@ export default function EditProductPage() {
                     required
                     value={product.name}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
-                    placeholder="Enter product name"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
+                    placeholder="e.g. Organic Farm Fresh Tomatoes"
                   />
                 </div>
                 
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700">
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                     Description *
                   </label>
                   <textarea
@@ -308,55 +284,63 @@ export default function EditProductPage() {
                     rows={4}
                     value={product.description}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
-                    placeholder="Enter product description"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
+                    placeholder="Provide detailed product features, benefits, and specifications..."
                   />
                 </div>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Category *
-                  </label>
-                  <select
-                    name="categoryId"
-                    required
-                    value={product.categoryId}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    name="isActive"
-                    id="isActive"
-                    checked={product.isActive}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
-                    Product is active (visible to customers)
-                  </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                      Category *
+                    </label>
+                    <select
+                      name="categoryId"
+                      required
+                      value={product.categoryId}
+                      onChange={handleInputChange}
+                      className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div className="flex items-center pt-6">
+                    <label className="relative flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="isActive"
+                        id="isActive"
+                        checked={product.isActive}
+                        onChange={handleInputChange}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                      <span className="ml-3 text-sm font-bold text-gray-900">
+                        {product.isActive ? 'Published (Live in Store)' : 'Hidden (Draft)'}
+                      </span>
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Pricing */}
-            <div className="border-b border-gray-200 pb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Pricing</h2>
+            <div className="border-t pt-6">
+              <div className="flex items-center space-x-2 border-b pb-3 mb-5">
+                <CurrencyRupeeIcon className="h-5 w-5 text-red-600" />
+                <h2 className="text-base font-bold text-gray-900">Pricing & Margins</h2>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Price (₹) *
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                    Selling Price (₹) *
                   </label>
                   <input
                     type="number"
@@ -366,38 +350,41 @@ export default function EditProductPage() {
                     step="0.01"
                     value={product.price}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
                     placeholder="0.00"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                     Compare At Price (₹)
-                    <span className="text-gray-500 text-xs ml-1">(Optional - for showing discounts)</span>
+                    <span className="text-gray-400 font-normal ml-1">(Optional - for discount tags)</span>
                   </label>
                   <input
                     type="number"
-                    name="compareAt"
+                    name="compareAtPrice"
                     min="0"
                     step="0.01"
-                    value={product.compareAt || ''}
+                    value={product.compareAtPrice || ''}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
                     placeholder="0.00"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Inventory */}
-            <div className="border-b border-gray-200 pb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Inventory</h2>
+            {/* Inventory & Dimensions */}
+            <div className="border-t pt-6">
+              <div className="flex items-center space-x-2 border-b pb-3 mb-5">
+                <ArchiveBoxIcon className="h-5 w-5 text-red-600" />
+                <h2 className="text-base font-bold text-gray-900">Inventory & Units</h2>
+              </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Stock Quantity
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                    Stock Quantity *
                   </label>
                   <input
                     type="number"
@@ -405,13 +392,13 @@ export default function EditProductPage() {
                     min="0"
                     value={product.stock}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
                     placeholder="0"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
                     Weight
                   </label>
                   <input
@@ -421,41 +408,20 @@ export default function EditProductPage() {
                     step="0.01"
                     value={product.weight || ''}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
                     placeholder="0.00"
                   />
                 </div>
-
-                {/* <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Unit
-                  </label>
-                  <select
-                    name="unit"
-                    value={formData.unit}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
-                  >
-                    <option value="KILOGRAMS">Kilogram (kg)</option>
-                    <option value="GRAMS">Gram (g)</option>
-                    <option value="POUNDS">Pound (lb)</option>
-                    <option value="OUNCES">Ounce (oz)</option>
-                    <option value="LITER">Liter (L)</option>
-                    <option value="MILLILITER">Milliliter (mL)</option>
-                    <option value="PIECE">Piece</option>
-                    <option value="PACK">Pack</option>
-                  </select>
-                </div> */}
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Unit
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                    Measurement Unit
                   </label>
                   <select
                     name="unit"
                     value={product.unit || 'KILOGRAMS'}
                     onChange={handleInputChange}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
                   >
                     <option value="KILOGRAMS">Kilogram (kg)</option>
                     <option value="GRAMS">Gram (g)</option>
@@ -471,16 +437,16 @@ export default function EditProductPage() {
             </div>
 
             {/* Images Management */}
-            <div className="border-b border-gray-200 pb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Product Images</h2>
-              <p className="text-sm text-gray-600 mb-4">
-                Upload images for this product using our secure image service.
-              </p>
+            <div className="border-t pt-6">
+              <div className="flex items-center space-x-2 border-b pb-3 mb-5">
+                <PhotoIcon className="h-5 w-5 text-red-600" />
+                <h2 className="text-base font-bold text-gray-900">Media Assets</h2>
+              </div>
               
               <ImageUploader
                 productId={productId}
                 existingImages={product.images}
-                onImagesChange={(newImages) => {
+                onImagesChange={(newImages: any) => {
                   setProduct(prev => ({
                     ...prev!,
                     images: newImages
@@ -492,13 +458,16 @@ export default function EditProductPage() {
             </div>
 
             {/* Tags */}
-            <div>
-              <h2 className="text-lg font-medium text-gray-900 mb-4">Tags</h2>
+            <div className="border-t pt-6">
+              <div className="flex items-center space-x-2 border-b pb-3 mb-5">
+                <HashtagIcon className="h-5 w-5 text-red-600" />
+                <h2 className="text-base font-bold text-gray-900">Product Tags</h2>
+              </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Product Tags
-                  <span className="text-gray-500 text-xs ml-1">(Press Enter to add)</span>
+                <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-2">
+                  Add Search Tags
+                  <span className="text-gray-400 font-normal ml-1">(Press Enter to add tag)</span>
                 </label>
                 
                 <input
@@ -506,22 +475,22 @@ export default function EditProductPage() {
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={handleTagAdd}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500"
-                  placeholder="Enter tags (e.g., organic, fresh, premium)"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-red-500 focus:border-red-500"
+                  placeholder="e.g. organic, fresh, bestseller"
                 />
                 
                 {product.tags.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="mt-3 flex flex-wrap gap-2">
                     {product.tags.map((tag, index) => (
                       <span
                         key={index}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800"
+                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-red-50 text-red-700 border border-red-200"
                       >
                         {tag}
                         <button
                           type="button"
                           onClick={() => removeTag(tag)}
-                          className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-red-200 focus:outline-none"
+                          className="ml-2 inline-flex items-center justify-center w-4 h-4 rounded-full hover:bg-red-200 text-red-600 transition"
                         >
                           ×
                         </button>
@@ -531,18 +500,19 @@ export default function EditProductPage() {
                 )}
               </div>
             </div>
+
           </div>
 
-          {/* Form Actions */}
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-lg flex items-center justify-between">
-            <div className="text-sm text-gray-500">
-              <p>Product Slug: <span className="font-mono">{product.slug}</span></p>
+          {/* Form Actions Footer */}
+          <div className="px-8 py-5 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-xs text-gray-500 font-mono">
+              Slug: <span className="text-gray-900">/{product.slug}</span>
             </div>
             
             <div className="flex items-center space-x-4">
               <Link
-                href="/admin"
-                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                href="/admin/products"
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-semibold text-gray-700 bg-white hover:bg-gray-50 transition shadow-sm"
               >
                 Cancel
               </Link>
@@ -550,9 +520,10 @@ export default function EditProductPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-5 py-2 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 transition"
               >
-                {isLoading ? 'Updating...' : 'Update Product'}
+                <CheckCircleIcon className="h-5 w-5 mr-1.5" />
+                {isLoading ? 'Saving Changes...' : 'Update Product'}
               </button>
             </div>
           </div>

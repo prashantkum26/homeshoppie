@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
@@ -311,7 +311,7 @@ export default function ProductImageManager({
 
 // Usage example in a product form
 export function ProductFormWithImages() {
-  const [productImages, setProductImages] = useState<ProductImage[]>([])
+  // const [productImages, setProductImages] = useState<ProductImage[]>([])
   const productId = "your-product-id" // This would come from your product data
 
   return (
@@ -324,7 +324,7 @@ export function ProductFormWithImages() {
         productId={productId}
         maxImages={8}
         onImagesChange={(images) => {
-          setProductImages(images)
+          // setProductImages(images)
           console.log('Product images updated:', images)
         }}
       />

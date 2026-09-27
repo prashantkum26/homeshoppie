@@ -52,31 +52,31 @@ function getAvatarColor(userId: string): { bg: string; text: string } {
 }
 
 // Generate SVG avatar
-function generateAvatarSVG(initials: string, color: { bg: string; text: string }): string {
-  return `
-    <svg width="${AVATAR_CONFIG.size}" height="${AVATAR_CONFIG.size}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${AVATAR_CONFIG.size}" height="${AVATAR_CONFIG.size}" fill="${color.bg}" />
-      <text 
-        x="50%" 
-        y="50%" 
-        text-anchor="middle" 
-        dominant-baseline="central" 
-        font-family="${AVATAR_CONFIG.fontFamily}" 
-        font-size="${AVATAR_CONFIG.fontSize}" 
-        font-weight="600"
-        fill="${color.text}"
-      >${initials}</text>
-    </svg>
-  `.trim()
-}
+// function generateAvatarSVG(initials: string, color: { bg: string; text: string }): string {
+//   return `
+//     <svg width="${AVATAR_CONFIG.size}" height="${AVATAR_CONFIG.size}" xmlns="http://www.w3.org/2000/svg">
+//       <rect width="${AVATAR_CONFIG.size}" height="${AVATAR_CONFIG.size}" fill="${color.bg}" />
+//       <text 
+//         x="50%" 
+//         y="50%" 
+//         text-anchor="middle" 
+//         dominant-baseline="central" 
+//         font-family="${AVATAR_CONFIG.fontFamily}" 
+//         font-size="${AVATAR_CONFIG.fontSize}" 
+//         font-weight="600"
+//         fill="${color.text}"
+//       >${initials}</text>
+//     </svg>
+//   `.trim()
+// }
 
 // GET generate avatar for user
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const userId = params.id
+    const userId = (await params).id
     const { searchParams } = new URL(request.url)
     const size = parseInt(searchParams.get('size') || '200')
     const format = searchParams.get('format') || 'png'
@@ -190,7 +190,7 @@ export async function GET(
       'webp': 'image/webp'
     }
 
-    return new NextResponse(imageBuffer, {
+    return new NextResponse(new Uint8Array(imageBuffer), {
       headers: {
         'Content-Type': contentTypes[format.toLowerCase()] || 'image/png',
         'Cache-Control': 'public, max-age=3600', // Cache for 1 hour

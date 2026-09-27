@@ -105,6 +105,8 @@ export const authOptions = {
           console.log('Using bcrypt built-in salt (legacy):', credentials.email)
         }
 
+        console.log("...................::", isPasswordValid)
+
         if (!isPasswordValid) {
           return null
         }
@@ -151,6 +153,15 @@ export const authOptions = {
   }
 }
 
-const { handlers, auth, signIn, signOut } = NextAuth(authOptions)
+// NextAuth v4 approach
+export default NextAuth(authOptions)
 
-export { handlers, auth, signIn, signOut }
+// For server-side session access in NextAuth v4, we use getServerSession
+import { getServerSession } from 'next-auth/next'
+
+export async function auth() {
+  return await getServerSession(authOptions)
+}
+
+// Export signIn and signOut from next-auth/react (they're imported differently in v4)
+export { signIn, signOut } from 'next-auth/react'

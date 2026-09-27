@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '../../lib/prisma'
 import crypto from 'crypto'
-import { headers } from 'next/headers'
 
 // Security configuration
 export const SECURITY_CONFIG = {
@@ -61,106 +60,133 @@ export function getClientIP(request: NextRequest): string {
 
 // Rate limiting implementation
 export async function checkRateLimit(
-  request: NextRequest,
+  ipAddress: string,
   endpoint: string,
   userId?: string
-): Promise<{ allowed: boolean; remaining: number; resetTime: number }> {
-  const ipAddress = getClientIP(request)
-  const identifier = userId || ipAddress
-  
-  // Get rate limit configuration based on endpoint
-  let maxRequests = SECURITY_CONFIG.rateLimiting.maxRequests.default
-  if (endpoint.includes('/auth/')) {
-    maxRequests = SECURITY_CONFIG.rateLimiting.maxRequests.auth
-  } else if (endpoint.includes('/api/')) {
-    maxRequests = SECURITY_CONFIG.rateLimiting.maxRequests.api
-  } else if (endpoint.includes('/upload/')) {
-    maxRequests = SECURITY_CONFIG.rateLimiting.maxRequests.upload
+): Promise<{
+  allowed: boolean
+  remaining: number
+  resetTime: number
+}> {
+  const { windowMs, maxRequests } = SECURITY_CONFIG.rateLimiting
+
+  // Determine the rate limit based on endpoint type
+  let maxRequestCount = maxRequests.default
+
+  if (endpoint.includes('auth')) {
+    maxRequestCount = maxRequests.auth
+  } else if (endpoint.includes('upload')) {
+    maxRequestCount = maxRequests.upload
+  } else if (endpoint.includes('api')) {
+    maxRequestCount = maxRequests.api
   }
-  
-  const windowStart = new Date(Date.now() - SECURITY_CONFIG.rateLimiting.windowMs)
-  
-  try {
-    // Clean old rate limit records
-    await prisma.rateLimit.deleteMany({
-      where: {
-        windowStart: { lt: windowStart }
-      }
-    })
-    
-    // Get or create rate limit record
-    const existingLimit = await prisma.rateLimit.findUnique({
-      where: { ipAddress_endpoint: { ipAddress, endpoint } }
-    })
-    
-    if (!existingLimit) {
-      // Create new rate limit record
-      await prisma.rateLimit.create({
-        data: {
-          ipAddress,
-          endpoint,
-          userId,
-          requests: 1,
-          windowStart: new Date()
-        }
-      })
-      
-      return {
-        allowed: true,
-        remaining: maxRequests - 1,
-        resetTime: Date.now() + SECURITY_CONFIG.rateLimiting.windowMs
+
+  const now = new Date()
+
+  // Find existing rate-limit record
+  const existingLimit = await prisma.rateLimit.findUnique({
+    where: {
+      ipAddress_endpoint: {
+        ipAddress,
+        endpoint
       }
     }
-    
-    // Check if within rate limit
-    if (existingLimit.requests >= maxRequests) {
-      // Log security event
-      if (userId) {
-        await logSecurityEvent({
-          userId,
-          action: 'API_ACCESS',
-          ipAddress,
-          severity: 'MEDIUM',
-          details: { endpoint, rateLimited: true, requests: existingLimit.requests },
-          blocked: true
-        })
-      } else {
-        await logSecurityEvent({
-          action: 'API_ACCESS',
-          ipAddress,
-          severity: 'MEDIUM',
-          details: { endpoint, rateLimited: true, requests: existingLimit.requests },
-          blocked: true
-        })
+  })
+
+  // No existing record — create a new rate-limit window
+  if (!existingLimit) {
+    const windowEnd = new Date(now.getTime() + windowMs)
+
+    await prisma.rateLimit.create({
+      data: {
+        ipAddress,
+        endpoint,
+        ...(userId !== undefined && { userId }),
+        requests: 1,
+        windowStart: now,
+        windowEnd,
+        blocked: false
       }
-      
-      return {
-        allowed: false,
-        remaining: 0,
-        resetTime: existingLimit.windowStart.getTime() + SECURITY_CONFIG.rateLimiting.windowMs
-      }
-    }
-    
-    // Increment request count
-    await prisma.rateLimit.update({
-      where: { id: existingLimit.id },
-      data: { requests: { increment: 1 } }
     })
-    
+
     return {
       allowed: true,
-      remaining: maxRequests - existingLimit.requests - 1,
-      resetTime: existingLimit.windowStart.getTime() + SECURITY_CONFIG.rateLimiting.windowMs
+      remaining: Math.max(0, maxRequestCount - 1),
+      resetTime: windowEnd.getTime()
     }
-    
-  } catch (error) {
-    console.error('Rate limit check failed:', error)
-    // Fail open for availability
-    return { allowed: true, remaining: maxRequests, resetTime: Date.now() }
+  }
+
+  // Existing rate-limit window has expired
+  if (now >= existingLimit.windowEnd) {
+    const windowEnd = new Date(now.getTime() + windowMs)
+
+    await prisma.rateLimit.update({
+      where: {
+        id: existingLimit.id
+      },
+      data: {
+        requests: 1,
+        windowStart: now,
+        windowEnd,
+        blocked: false,
+        resetAt: null,
+        ...(userId !== undefined && { userId })
+      }
+    })
+
+    return {
+      allowed: true,
+      remaining: Math.max(0, maxRequestCount - 1),
+      resetTime: windowEnd.getTime()
+    }
+  }
+
+  // Rate limit exceeded
+  if (existingLimit.requests >= maxRequestCount) {
+    await prisma.rateLimit.update({
+      where: {
+        id: existingLimit.id
+      },
+      data: {
+        blocked: true,
+        resetAt: existingLimit.windowEnd
+      }
+    })
+
+    return {
+      allowed: false,
+      remaining: 0,
+      resetTime: existingLimit.windowEnd.getTime()
+    }
+  }
+
+  // Increment request count
+  const updatedLimit = await prisma.rateLimit.update({
+    where: {
+      id: existingLimit.id
+    },
+    data: {
+      requests: {
+        increment: 1
+      },
+      blocked: false,
+      ...(userId !== undefined && { userId })
+    }
+  })
+
+  return {
+    allowed: true,
+    remaining: Math.max(
+      0,
+      maxRequestCount - updatedLimit.requests
+    ),
+    resetTime: updatedLimit.windowEnd.getTime()
   }
 }
 
+
 // Security logging
+
 export async function logSecurityEvent({
   userId,
   action,
@@ -175,18 +201,20 @@ export async function logSecurityEvent({
   ipAddress: string
   userAgent?: string
   severity?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-  details?: any
+  details?: unknown
   blocked?: boolean
 }) {
   try {
     await prisma.securityLog.create({
       data: {
-        userId,
+        ...(userId !== undefined && { userId }),
         action: action as any,
         ipAddress,
-        userAgent,
+        ...(userAgent !== undefined && { userAgent }),
         severity,
-        details: details ? JSON.parse(JSON.stringify(details)) : null,
+        details: details !== undefined
+          ? JSON.parse(JSON.stringify(details))
+          : null,
         blocked
       }
     })
@@ -280,18 +308,28 @@ export function validatePassword(password: string): { valid: boolean; errors: st
 }
 
 // Check if user account is locked
-export async function checkAccountLock(email: string): Promise<{ locked: boolean; lockUntil?: Date }> {
+export async function checkAccountLock(
+  email: string
+): Promise<{ locked: boolean; lockUntil?: Date }> {
   try {
     const user = await prisma.user.findUnique({
       where: { email },
-      select: { isLocked: true, lockUntil: true }
+      select: {
+        isLocked: true,
+        lockUntil: true
+      }
     })
-    
-    if (!user) return { locked: false }
-    
-    // Check if lock has expired
-    if (user.isLocked && user.lockUntil && user.lockUntil < new Date()) {
-      // Unlock the account
+
+    if (!user) {
+      return { locked: false }
+    }
+
+    // Lock expired
+    if (
+      user.isLocked &&
+      user.lockUntil !== null &&
+      user.lockUntil < new Date()
+    ) {
       await prisma.user.update({
         where: { email },
         data: {
@@ -300,15 +338,20 @@ export async function checkAccountLock(email: string): Promise<{ locked: boolean
           failedLoginCount: 0
         }
       })
+
       return { locked: false }
     }
-    
+
     return {
       locked: user.isLocked,
-      lockUntil: user.lockUntil || undefined
+      ...(user.lockUntil !== null && {
+        lockUntil: user.lockUntil
+      })
     }
   } catch (error) {
     console.error('Error checking account lock:', error)
+
+    // Consider failing closed for security-sensitive authentication flows.
     return { locked: false }
   }
 }

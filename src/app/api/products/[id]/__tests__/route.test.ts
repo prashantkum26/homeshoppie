@@ -26,7 +26,7 @@ describe('/api/products/[id] - GET', () => {
     description: 'Test Description',
     price: 100,
     originalPrice: 120,
-    compareAt: 120,
+    compareAtPrice: 120,
     stock: 10,
     sku: 'TEST001',
     images: ['image1.jpg'],
@@ -44,7 +44,7 @@ describe('/api/products/[id] - GET', () => {
       slug: 'related-product',
       name: 'Related Product',
       price: 80,
-      compareAt: 100,
+      compareAtPrice: 100,
       stock: 5,
       categoryId: 'cat1',
       isActive: true,
@@ -108,8 +108,8 @@ describe('/api/products/[id] - GET', () => {
     expect(data.error).toBe('Product not found')
   })
 
-  it('should handle products without compareAt price', async () => {
-    const productWithoutCompareAt = { ...mockProduct, compareAt: null }
+  it('should handle products without compareAtPrice: price', async () => {
+    const productWithoutCompareAt = { ...mockProduct, compareAtPrice: null }
     mockFindUnique.mockResolvedValue(productWithoutCompareAt as any)
     mockFindMany.mockResolvedValue([])
 

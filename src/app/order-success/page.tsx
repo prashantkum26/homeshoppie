@@ -1,10 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { CheckCircleIcon, TruckIcon, ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
 import useCartStore from '@/store/cartStore'
 
@@ -28,11 +27,11 @@ interface Order {
     street: string
     city: string
     state: string
-    pincode: string
+    postalCode: string
   }
 }
 
-export default function OrderSuccessPage() {
+function OrderSuccessContent() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -227,7 +226,7 @@ export default function OrderSuccessPage() {
                     <p>{order.address.phone}</p>
                     <p>{order.address.street}</p>
                     <p>{order.address.city}, {order.address.state}</p>
-                    <p>{order.address.pincode}</p>
+                    <p>{order.address.postalCode}</p>
                   </div>
                 </div>
               </div>
@@ -330,5 +329,20 @@ export default function OrderSuccessPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+
+export default function OrderSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-green-600"></div>
+        </div>
+      }
+    >
+      <OrderSuccessContent />
+    </Suspense>
   )
 }

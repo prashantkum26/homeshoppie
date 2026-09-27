@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
 import { 
@@ -26,7 +25,6 @@ interface WishlistItem {
 
 export default function WishlistPage() {
   const { data: session, status } = useSession()
-  const router = useRouter()
   const { items, removeFromWishlist, clearWishlist, fetchFromServer, isLoading } = useWishlistStore()
   const { addItem } = useCartStore()
   
@@ -70,13 +68,13 @@ export default function WishlistPage() {
       price: item.price,
       images: item.images || [],
       description: '',
-      compareAt: null,
+      compareAtPrice: null,
       categoryId: '',
       stock: 0,
       isActive: true,
       slug: item.id,
       weight: null,
-      unit: null,
+      weightUnit: null,
       tags: [],
       createdAt: new Date(),
       updatedAt: new Date()

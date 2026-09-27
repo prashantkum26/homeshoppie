@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
-import NextAuth from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-const { auth } = NextAuth(authOptions)
 
 // GET all users (admin only)
 export async function GET() {
@@ -24,15 +22,16 @@ export async function GET() {
         email: true,
         phone: true,
         role: true,
+        isActive: true,
+        isLocked: true,
+        failedLoginCount: true,
+        lastLoginAt: true,
         createdAt: true,
-        updatedAt: true,
         _count: {
-          select: {
-            orders: true
-          }
+          select: { orders: true }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     })
 
     return NextResponse.json(users)

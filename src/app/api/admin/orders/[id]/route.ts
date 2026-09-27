@@ -6,10 +6,10 @@ import { logSecurityEvent, getClientIP } from '@/lib/security'
 // GET single order (admin only)
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const ipAddress = getClientIP(request)
-  const { id: orderId } = await params
+  const { id: orderId } = await params;
   
   try {
     const session = await auth()
@@ -110,10 +110,10 @@ export async function GET(
 // PATCH update order status (admin only)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const ipAddress = getClientIP(request)
-  const { id: orderId } = await params
+  const { id: orderId } = await params;
   
   try {
     const session = await auth()

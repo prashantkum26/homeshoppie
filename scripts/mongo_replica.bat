@@ -1,6 +1,6 @@
 @echo off
 SET REPLSET=rs0
-SET MONGO_CONF="C:\Program Files\MongoDB\Server\6.0\bin\mongod.cfg"
+SET MONGO_CONF="C:\Program Files\MongoDB\Server\8.2\bin\mongod.cfg"
 
 echo ==============================================
 echo  Stopping MongoDB Service
@@ -29,7 +29,7 @@ timeout /t 5 /nobreak >nul
 echo ==============================================
 echo  Initializing the Replica Set
 echo ==============================================
-"C:\Program Files\MongoDB\Server\6.0\bin\mongo.exe" --eval "rs.initiate()"
+"C:\Program Files\MongoDB\Server\8.2\bin\mongo.exe" --eval "rs.initiate()"
 
 echo ==============================================
 echo Replica Set Setup Completed!

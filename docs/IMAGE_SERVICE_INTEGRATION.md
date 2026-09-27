@@ -61,7 +61,7 @@ Update the following variables in `.env.local`:
 
 ```env
 # Image Service Configuration (Server-side)
-IMAGE_SERVICE_URL="http://localhost:3001/api"
+IMAGE_SERVICE_BASE_URL="http://localhost:3001/api"
 IMAGE_SERVICE_AUTO_PASSWORD="homeshoppie_secure_2024"
 
 # Client-side endpoints (use homeshoppie proxy endpoints)  
@@ -78,7 +78,7 @@ npm install
 npm start
 ```
 
-The image service should be running on `http://localhost:3001`
+The image service should be running on `http://localhost:5000`
 
 ### 3. Start Homeshoppie
 
@@ -88,7 +88,7 @@ npm install
 npm run dev
 ```
 
-Homeshoppie should be running on `http://localhost:3000`
+Homeshoppie should be running on `http://localhost:5000`
 
 ## Architecture
 

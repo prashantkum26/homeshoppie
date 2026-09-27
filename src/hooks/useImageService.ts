@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { imageService } from '../lib/imageService'
-import toast from 'react-hot-toast'
 
 interface UseImageServiceReturn {
   isAuthenticated: boolean

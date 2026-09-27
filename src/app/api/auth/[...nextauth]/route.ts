@@ -1,6 +1,7 @@
-import NextAuth from 'next-auth'
-import { authOptions } from '@/lib/auth'
+import NextAuth from '@/lib/auth'
 
-const { handlers } = NextAuth(authOptions)
+// In NextAuth v4, we directly export the default NextAuth instance
+// The handlers are automatically available as GET and POST methods
+const handler = NextAuth
 
-export const { GET, POST } = handlers
+export { handler as GET, handler as POST }

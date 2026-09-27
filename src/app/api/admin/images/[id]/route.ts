@@ -141,7 +141,7 @@ export async function DELETE(
   try {
     const session = await auth()
 
-    if (!session?.user?.id || session.user.role !== 'ADMIN') {
+    if (!session?.user?.id || !['ADMIN', 'SUPER_ADMIN'].includes(session.user.role)) {
       return NextResponse.json(
         { error: 'Unauthorized - Admin access required' },
         { status: 401 }
@@ -201,7 +201,6 @@ export async function DELETE(
       console.log(`🗑️ Deleting local fallback image: ${imageId}`)
       
       // Remove from product's images array if productId provided
-      let updatedProduct = null
       if (productId) {
         try {
           const imageUrl = `/api/public/images/${imageId}`
@@ -235,6 +234,15 @@ export async function DELETE(
         }
       }
 
+      // 🔴 NEW: Remove from Prisma Image collection so it disappears from Media Library
+      try {
+        await prisma.image.deleteMany({
+          where: { serviceImageId: imageId }
+        })
+      } catch (e) {
+        console.error('Error cleaning up local Image record from Media Library:', e)
+      }
+
       return NextResponse.json({
         success: true,
         message: 'Local image reference deleted successfully',
@@ -251,6 +259,18 @@ export async function DELETE(
 
     // Delete image using HomeshoppieImageService for external images
     const success = await imageService.deleteImage(imageId)
+
+    // 🔴 NEW: If external deletion was successful, remove it from the Prisma Image collection
+    if (success) {
+      try {
+        await prisma.image.deleteMany({
+          where: { serviceImageId: imageId }
+        })
+        console.log(`✅ Removed image ${imageId} from Prisma Image collection`)
+      } catch (dbSyncError) {
+        console.error('❌ Failed to remove image from Prisma collection:', dbSyncError)
+      }
+    }
 
     return NextResponse.json({
       success: success,

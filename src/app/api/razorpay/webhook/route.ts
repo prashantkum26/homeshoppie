@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyWebhookSignature, RAZORPAY_CONFIG } from "@/lib/razorpay";
+import { verifyWebhookSignature } from "@/lib/razorpay";
 import { logSecurityEvent, getClientIP } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest) {
 
 async function handlePaymentSuccess(paymentEntity: any) {
   try {
-    const { id: paymentId, order_id: razorpayOrderId, amount, status, method } = paymentEntity;
+    const { id: paymentId, order_id: razorpayOrderId, amount, method } = paymentEntity;
 
     // Find payment log
     const paymentLog = await prisma.paymentLog.findFirst({

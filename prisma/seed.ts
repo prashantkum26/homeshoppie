@@ -117,7 +117,6 @@ const products = [
     description: 'Authentic Bihar special thekua made with wheat flour, jaggery, and ghee. Perfect for festivals like Chhath Puja and daily snacking.',
     price: 199,
     compareAtPrice: null,
-    images: ['/images/thekua-1.jpg', '/images/thekua-2.jpg'],
     categoryName: 'Sweets',
     stock: 80,
     slug: 'traditional-thekua',

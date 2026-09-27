@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import Image from 'next/image'
-import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { PhotoIcon, XMarkIcon, ArrowUpTrayIcon } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 
 interface ImageUploaderProps {
@@ -89,7 +89,7 @@ export default function ImageUploader({
         try {
           // Create FormData for upload
           const formData = new FormData()
-          formData.append('image', file)
+          formData.append('file', file) // Note: your external API expects 'file' or 'image', standard is 'file' in the new proxy
           formData.append('entityType', 'product')
           formData.append('category', category)
           formData.append('alt', `Product image - ${file.name}`)
@@ -99,8 +99,8 @@ export default function ImageUploader({
             formData.append('productId', productId)
           }
 
-          // Upload via homeshoppie proxy endpoint
-          const response = await fetch('/api/images/upload', {
+          // 🔴 CHANGED: Now using the new Next.js Admin Proxy Route!
+          const response = await fetch('/api/admin/media/upload', {
             method: 'POST',
             body: formData
           })
@@ -112,12 +112,13 @@ export default function ImageUploader({
 
           const result = await response.json()
 
+          // 🔴 CHANGED: Extract data based on the new API response structure ({ success, image, url })
           return {
-            id: result.data.imageId,
-            url: `/api/public/images/${result.data.imageId}`,
-            accessToken: result.data.accessToken || '',
-            thumbnailUrl: `/api/public/images/${result.data.imageId}?size=thumbnail`,
-            originalName: result.data.originalName
+            id: result.image.serviceImageId,
+            url: result.url,
+            accessToken: result.image.accessToken || '',
+            thumbnailUrl: result.image.thumbnailUrl || `${result.url}?size=thumbnail`,
+            originalName: result.image.originalName
           }
         } catch (error) {
           console.error(`Failed to upload ${file.name}:`, error)
@@ -248,7 +249,7 @@ export default function ImageUploader({
           <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
           <div className="mt-4">
             <p className="text-sm text-gray-600">
-              {uploading ? 'Uploading...' : 'Drag and drop images here, or click to browse'}
+              {uploading ? 'Uploading & Syncing to Library...' : 'Drag and drop images here, or click to browse'}
             </p>
             <p className="text-xs text-gray-500 mt-1">
               PNG, JPG, WebP up to 5MB each (max {maxImages} images)
@@ -259,7 +260,7 @@ export default function ImageUploader({
             <div className="mt-4">
               <div className="inline-flex items-center px-4 py-2 bg-red-100 text-red-800 rounded-md">
                 <ArrowUpTrayIcon className="animate-pulse h-4 w-4 mr-2" />
-                Uploading images...
+                Processing images...
               </div>
             </div>
           )}
@@ -275,15 +276,26 @@ export default function ImageUploader({
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {images.map((image, index) => (
               <div key={`${image.id}-${index}`} className="relative group">
-                <div className="aspect-square bg-gray-200 rounded-lg overflow-hidden">
-                  <Image
+                <div className="aspect-square bg-gray-200 rounded-lg overflow-hidden border border-gray-200">
+                  {/* <Image
                     src={image.thumbnailUrl || image.url}
                     alt={image.originalName}
                     width={200}
                     height={200}
                     className="w-full h-full object-cover"
-                    onError={() => {
-                      console.error('Failed to load image:', image.url)
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" fill="%23eee"><rect width="100%" height="100%" fill="%23ddd"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="10" fill="%23666">No Img</text></svg>'
+                    }}
+                  /> */}
+
+                  <img
+                    src={image.thumbnailUrl || image.url}
+                    alt={image.originalName}
+                    width={200}
+                    height={200}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" fill="%23eee"><rect width="100%" height="100%" fill="%23ddd"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="10" fill="%23666">No Img</text></svg>'
                     }}
                   />
                 </div>
@@ -295,7 +307,7 @@ export default function ImageUploader({
                     e.stopPropagation()
                     removeImage(image.id, index)
                   }}
-                  className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100"
+                  className="absolute top-2 right-2 p-1 bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100 shadow"
                   title="Remove image"
                 >
                   <XMarkIcon className="h-4 w-4" />

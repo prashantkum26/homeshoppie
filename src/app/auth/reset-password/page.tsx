@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { EyeIcon, EyeSlashIcon, CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline'
@@ -17,7 +17,7 @@ interface PasswordRequirement {
   met: boolean
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordContent() {
   const [formData, setFormData] = useState<FormData>({
     password: '',
     confirmPassword: ''
@@ -27,7 +27,7 @@ export default function ResetPasswordPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [token, setToken] = useState<string | null>(null)
   const [tokenValid, setTokenValid] = useState<boolean | null>(null)
-  
+
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -57,10 +57,10 @@ export default function ResetPasswordPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token: tokenToVerify })
       })
-      
+
       const data = await response.json()
       setTokenValid(data.valid)
-      
+
       if (!data.valid) {
         toast.error(data.message || 'Invalid or expired reset token')
       }
@@ -115,7 +115,7 @@ export default function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    
+
     if (!validatePasswords() || !token) {
       return
     }
@@ -140,7 +140,7 @@ export default function ResetPasswordPage() {
       }
 
       toast.success('Password reset successfully!')
-      
+
       // Redirect to sign in page
       setTimeout(() => {
         router.push('/auth/signin?message=password-reset-success')
@@ -242,7 +242,7 @@ export default function ResetPasswordPage() {
                   )}
                 </button>
               </div>
-              
+
               {/* Password Requirements */}
               {formData.password && (
                 <div className="mt-3 p-4 bg-gray-50 rounded-md">
@@ -293,7 +293,7 @@ export default function ResetPasswordPage() {
                   )}
                 </button>
               </div>
-              
+
               {/* Password Match Indicator */}
               {formData.confirmPassword && (
                 <div className="mt-2 flex items-center text-sm">
@@ -337,5 +337,22 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <ResetPasswordContent />
+    </Suspense>
   )
 }

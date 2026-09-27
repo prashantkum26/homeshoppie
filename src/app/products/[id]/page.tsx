@@ -1,12 +1,11 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useParams, notFound } from 'next/navigation'
 import Link from 'next/link'
 import { 
   HeartIcon, 
-  ShoppingCartIcon, 
-  StarIcon,
+  ShoppingCartIcon,
   ArrowLeftIcon,
   MinusIcon,
   PlusIcon,
@@ -26,7 +25,7 @@ interface Product {
   name: string
   description: string
   price: number
-  compareAt?: number | null
+  compareAtPrice?: number | null
   discountPercent: number
   stock: number
   inStock: boolean
@@ -43,7 +42,7 @@ interface Product {
     slug?: string
     name: string
     price: number
-    compareAt?: number | null
+    compareAtPrice?: number | null
     discountPercent: number
     inStock: boolean
     category?: {
@@ -120,7 +119,7 @@ export default function ProductPage() {
       name: product.name,
       description: product.description,
       price: product.price,
-      compareAt: product.compareAt ?? null,
+      compareAtPrice: product.compareAtPrice ?? null,
       stock: product.stock,
       images: product.images || [],
       categoryId: product.category?.slug || 'general',
@@ -340,13 +339,13 @@ export default function ProductPage() {
                 <span className="text-3xl font-bold text-gray-900">
                   ₹{product.price}
                 </span>
-                {product.compareAt && (
+                {product.compareAtPrice && (
                   <>
                     <span className="text-xl text-gray-500 line-through">
-                      ₹{product.compareAt}
+                      ₹{product.compareAtPrice}
                     </span>
                     <span className="bg-green-100 text-green-800 text-sm px-2 py-1 rounded">
-                      Save ₹{(product.compareAt - product.price).toFixed(2)}
+                      Save ₹{(product.compareAtPrice - product.price).toFixed(2)}
                     </span>
                   </>
                 )}
@@ -639,9 +638,9 @@ export default function ProductPage() {
                         <span className="text-lg font-bold text-gray-900">
                           ₹{relatedProduct.price}
                         </span>
-                        {relatedProduct.compareAt && (
+                        {relatedProduct.compareAtPrice && (
                           <span className="text-sm text-gray-500 line-through">
-                            ₹{relatedProduct.compareAt}
+                            ₹{relatedProduct.compareAtPrice}
                           </span>
                         )}
                       </div>
