@@ -233,6 +233,12 @@ export const generateIdempotencyKey = (
  *
  * Input amount is in RUPEES.
  */
+/**
+ * Validate payment amount.
+ *
+ * Input amount is in RUPEES.
+ * Uses string normalization to prevent JS floating-point precision errors.
+ */
 export const validatePaymentAmount = (
   amount: number
 ): { valid: boolean; error?: string } => {
@@ -251,35 +257,29 @@ export const validatePaymentAmount = (
   }
 
   /*
-   * Currency amounts should not have more than
-   * two decimal places.
+   * Bulletproof decimal place check:
+   * Normalizes the number to 2 decimal places and verifies 
+   * it matches the original value, preventing floating-point drift.
    */
-  if (
-    Math.round(amount * 100) !== amount * 100
-  ) {
+  const normalized = Number(amount.toFixed(2));
+  if (normalized !== amount) {
     return {
       valid: false,
       error: "Payment amount cannot have more than two decimal places",
     };
   }
 
-  if (
-    amount < RAZORPAY_CONFIG.limits.minAmount
-  ) {
+  if (amount < RAZORPAY_CONFIG.limits.minAmount) {
     return {
       valid: false,
-      error:
-        `Minimum payment amount is ₹${RAZORPAY_CONFIG.limits.minAmount}`,
+      error: `Minimum payment amount is ₹${RAZORPAY_CONFIG.limits.minAmount}`,
     };
   }
 
-  if (
-    amount > RAZORPAY_CONFIG.limits.maxAmount
-  ) {
+  if (amount > RAZORPAY_CONFIG.limits.maxAmount) {
     return {
       valid: false,
-      error:
-        `Maximum payment amount is ₹${RAZORPAY_CONFIG.limits.maxAmount}`,
+      error: `Maximum payment amount is ₹${RAZORPAY_CONFIG.limits.maxAmount}`,
     };
   }
 
@@ -300,6 +300,7 @@ export const createSecureOrder = async (params: {
   userId: string;
   receipt?: string;
   notes?: Record<string, string>;
+  paymentMethod: "netbanking" | "upi" | "card" | "emandate" | "nach";
 }) => {
   const {
     amount,
@@ -307,6 +308,7 @@ export const createSecureOrder = async (params: {
     userId,
     receipt,
     notes = {},
+    paymentMethod
   } = params;
 
   if (!orderId) {
@@ -333,8 +335,7 @@ export const createSecureOrder = async (params: {
    * Example:
    * ₹500 -> 50000 paise
    */
-  const amountInPaise =
-    Math.round(amount * 100);
+  const amountInPaise = Math.round(amount * 100);
 
   const idempotencyKey =
     generateIdempotencyKey(
@@ -345,24 +346,15 @@ export const createSecureOrder = async (params: {
 
   const orderOptions = {
     amount: amountInPaise,
-
     currency: RAZORPAY_CONFIG.currency,
-
-    receipt:
-      receipt || `receipt_${orderId}`,
-
+    receipt: receipt || `receipt_${orderId}`,
     payment_capture: true,
-
     notes: {
       ...notes,
-
       order_id: orderId,
-
       user_id: userId,
-
-      created_at:
-        new Date().toISOString(),
-    },
+      created_at: new Date().toISOString(),
+    }
   };
 
   try {
@@ -373,40 +365,23 @@ export const createSecureOrder = async (params: {
      */
     const razorpay = getRazorpay();
 
-    const order =
-      await razorpay.orders.create(
-        orderOptions
-      );
+    const order = await razorpay.orders.create({ ...orderOptions, method: paymentMethod });
 
-    console.log(
-      "Secure Razorpay order created:",
+    console.log("Secure Razorpay order created:",
       {
         razorpay_order_id: order.id,
-
         internal_order_id: orderId,
-
         amount,
-
         amount_in_paise: amountInPaise,
-
         user_id: userId,
-
         idempotency_key: idempotencyKey,
-
-        timestamp:
-          new Date().toISOString(),
+        timestamp: new Date().toISOString()
       }
     );
 
-    return {
-      ...order,
-      idempotency_key: idempotencyKey,
-    };
+    return { ...order, idempotency_key: idempotencyKey };
   } catch (error: unknown) {
-    console.error(
-      "Failed to create Razorpay order:",
-      error
-    );
+    console.error("Failed to create Razorpay order:", error);
 
     const message =
       error instanceof Error

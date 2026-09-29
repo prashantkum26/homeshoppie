@@ -6,11 +6,11 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 
-// Match your Prisma schema for TaxConfiguration
+// Synced with your Prisma schema enum TaxType
 interface TaxConfiguration {
   id: string
   name: string
-  type: 'PERCENTAGE' | 'FLAT' | 'COMPOUND'
+  type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'GST' | 'CGST' | 'SGST' | 'IGST' | 'STATE_TAX' | 'CITY_TAX'
   rate: number
   isActive: boolean
   applicableIn: string[]
@@ -26,7 +26,7 @@ interface TaxConfiguration {
 
 const DEFAULT_FORM_STATE = {
   name: '',
-  type: 'PERCENTAGE',
+  type: 'PERCENTAGE', // Maps correctly to enum
   rate: 0,
   isActive: true,
   applicableIn: ['ALL'],
@@ -103,7 +103,6 @@ export default function TaxManagementPage() {
     e.preventDefault()
     setIsSubmitting(true)
 
-    // Clean up empty strings to null for strict Prisma types
     const payload = {
       ...formData,
       rate: Number(formData.rate),
@@ -193,7 +192,7 @@ export default function TaxManagementPage() {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Rule Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Rate</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Rate / Type</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Applicability</th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Validity</th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Status</th>
@@ -216,9 +215,11 @@ export default function TaxManagementPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-bold text-gray-900">
-                          {tax.rate}{tax.type === 'PERCENTAGE' ? '%' : ' ₹'}
+                          {tax.rate}{['PERCENTAGE', 'GST', 'CGST', 'SGST', 'IGST', 'STATE_TAX', 'CITY_TAX'].includes(tax.type) ? '%' : ' ₹'}
                         </div>
-                        <div className="text-xs text-gray-500">{tax.type}</div>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-800">
+                          {tax.type}
+                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-xs text-gray-900 mb-1">
@@ -226,7 +227,7 @@ export default function TaxManagementPage() {
                         </div>
                         {(tax.minAmount || tax.maxAmount) && (
                           <div className="text-[10px] bg-gray-100 px-2 py-1 rounded inline-block">
-                            Limits: ₹{tax.minAmount || 0} - {tax.maxAmount ? `₹${tax.maxAmount}` : '∞'}
+                            Limits: ₹{tax.minAmount || 0} → {tax.maxAmount ? `₹${tax.maxAmount}` : '∞'}
                           </div>
                         )}
                       </td>
@@ -285,7 +286,7 @@ export default function TaxManagementPage() {
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-red-500 focus:border-red-500 sm:text-sm"
-                    placeholder="e.g. GST 18% Electronics"
+                    placeholder="e.g. Standard GST 18%"
                   />
                 </div>
 
@@ -303,14 +304,20 @@ export default function TaxManagementPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Type *</label>
+                    <label className="block text-sm font-medium text-gray-700">Tax Type *</label>
                     <select
                       value={formData.type}
                       onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                       className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-red-500 focus:border-red-500 sm:text-sm"
                     >
                       <option value="PERCENTAGE">Percentage (%)</option>
-                      <option value="FLAT">Flat Amount (₹)</option>
+                      <option value="FIXED_AMOUNT">Fixed Amount (₹)</option>
+                      <option value="GST">GST</option>
+                      <option value="CGST">CGST</option>
+                      <option value="SGST">SGST</option>
+                      <option value="IGST">IGST</option>
+                      <option value="STATE_TAX">State Tax</option>
+                      <option value="CITY_TAX">City Tax</option>
                     </select>
                   </div>
                 </div>
@@ -384,7 +391,6 @@ export default function TaxManagementPage() {
                   </label>
                 </div>
 
-                {/* Footer Buttons */}
                 <div className="pt-6 pb-2">
                   <button
                     type="submit"

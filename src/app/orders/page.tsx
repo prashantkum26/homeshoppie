@@ -13,29 +13,34 @@ import {
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 
+interface OrderItem {
+  id: string
+  name: string
+  quantity: number
+  unitPrice: number | string
+  totalPrice: number | string
+}
+
+interface Address {
+  name: string
+  street1: string
+  street2?: string
+  city: string
+  state: string
+  postalCode: string
+}
+
 interface Order {
   id: string
   orderNumber: string
-  totalAmount: number
+  totalAmount: number | string
   paymentMethod: string
   paymentStatus: string
   status: string
   createdAt: string
   updatedAt: string
-  orderItems: Array<{
-    id: string
-    name: string
-    quantity: number
-    unitPrice: number
-    totalPrice: number
-  }>
-  address: {
-    name: string
-    street: string
-    city: string
-    state: string
-    postalCode: string
-  }
+  orderItems: OrderItem[]
+  address: Address
 }
 
 export default function OrdersPage() {
@@ -59,7 +64,7 @@ export default function OrdersPage() {
       try {
         const response = await fetch('/api/orders')
         
-        if (!isMounted) return // Check if component is still mounted
+        if (!isMounted) return
         
         if (response.ok) {
           const ordersData = await response.json()
@@ -194,7 +199,7 @@ export default function OrdersPage() {
         {/* Filters */}
         <div className="mb-6">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+            <nav className="-mb-px flex space-x-8 overflow-x-auto">
               {[
                 { key: 'all', label: 'All Orders', count: orders.length },
                 { key: 'pending', label: 'Pending', count: orders.filter(o => o.status === 'PENDING' || o.status === 'CONFIRMED').length },
@@ -210,7 +215,7 @@ export default function OrdersPage() {
                     filter === tab.key
                       ? 'border-green-500 text-green-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
+                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center`}
                 >
                   {tab.label}
                   {tab.count > 0 && (
@@ -249,16 +254,14 @@ export default function OrdersPage() {
               <div key={order.id} className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
                 <div className="p-6">
                   {/* Order Header */}
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">
-                          Order #{order.orderNumber}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          Placed on {formatDate(order.createdAt)}
-                        </p>
-                      </div>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Order #{order.orderNumber}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        Placed on {formatDate(order.createdAt)}
+                      </p>
                     </div>
                     
                     <div className="flex items-center space-x-3">
@@ -278,18 +281,16 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Order Info */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                     <div>
                       <p className="text-sm text-gray-500">Total Amount</p>
-                      <p className="font-semibold text-gray-900">₹{order.totalAmount.toFixed(2)}</p>
+                      <p className="font-semibold text-gray-900">₹{Number(order.totalAmount).toFixed(2)}</p>
                     </div>
                     
                     <div>
                       <p className="text-sm text-gray-500">Payment Method</p>
-                      <p className="font-medium text-gray-900">
-                        {order.paymentMethod === 'card' && 'Card'}
-                        {order.paymentMethod === 'upi' && 'UPI'}
-                        {order.paymentMethod === 'cod' && 'Cash on Delivery'}
+                      <p className="font-medium text-gray-900 uppercase">
+                        {order.paymentMethod}
                       </p>
                     </div>
                     
@@ -319,7 +320,7 @@ export default function OrdersPage() {
                             <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
                           </div>
                           <p className="text-sm font-medium text-gray-900">
-                            ₹{item.totalPrice.toFixed(2)}
+                            ₹{Number(item.totalPrice).toFixed(2)}
                           </p>
                         </div>
                       ))}
@@ -333,12 +334,15 @@ export default function OrdersPage() {
                   </div>
 
                   {/* Delivery Address */}
-                  <div className="border-t mt-4 pt-4">
-                    <p className="text-sm text-gray-500 mb-1">Delivery Address</p>
-                    <p className="text-sm text-gray-900">
-                      {order.address.name}, {order.address.street}, {order.address.city}, {order.address.state} - {order.address.postalCode}
-                    </p>
-                  </div>
+                  {order.address && (
+                    <div className="border-t mt-4 pt-4">
+                      <p className="text-sm text-gray-500 mb-1">Delivery Address</p>
+                      <p className="text-sm text-gray-900">
+                        {order.address.name}, {order.address.street1}
+                        {order.address.street2 ? `, ${order.address.street2}` : ''}, {order.address.city}, {order.address.state} - {order.address.postalCode}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Special Messages for Failed Payments */}
                   {order.paymentStatus === 'FAILED' && (
@@ -351,16 +355,16 @@ export default function OrdersPage() {
                             <p className="mt-1 text-sm text-red-700">
                               Your payment could not be processed. Please try placing the order again.
                             </p>
-                            <div className="mt-3 space-y-2">
+                            <div className="mt-3 space-x-4">
                               <Link
                                 href={`/orders/${order.id}?action=retry`}
-                                className="inline-block text-sm font-medium text-red-800 hover:text-red-900 mr-4"
+                                className="inline-block text-sm font-medium text-red-800 hover:text-red-900 underline"
                               >
                                 View Details & Retry →
                               </Link>
                               <Link
                                 href="/cart"
-                                className="inline-block text-sm font-medium text-gray-600 hover:text-gray-800"
+                                className="inline-block text-sm font-medium text-gray-600 hover:text-gray-800 underline"
                               >
                                 Start New Order
                               </Link>

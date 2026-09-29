@@ -35,10 +35,10 @@ export default function CheckoutPage() {
   const router = useRouter()
   const { clearCart } = useCartStore();
 
-  //----------
   const [items, setItems] = useState<any[]>([])
   const [subtotal, setSubtotal] = useState(0)
   const [shippingFee, setShippingFee] = useState(0)
+  const [taxAmount, setTaxAmount] = useState(0) // 👈 Added Tax state
   const [total, setTotal] = useState(0)
   const [itemCount, setItemCount] = useState(0)
 
@@ -80,14 +80,8 @@ export default function CheckoutPage() {
       return
     }
 
-    // if (items.length === 0) {
-    //   router.push('/cart')
-    //   toast.error('Your cart is empty')
-    //   return
-    // }
-
     fetchSavedAddresses()
-  }, [status, items.length, router])
+  }, [status, router])
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -107,7 +101,6 @@ export default function CheckoutPage() {
         const addresses = await response.json()
         setSavedAddresses(addresses)
 
-        // If user has saved addresses, use the first one as default
         if (addresses.length > 0) {
           const address = addresses[0]
           setFormData(prev => ({
@@ -181,14 +174,12 @@ export default function CheckoutPage() {
   const validateForm = () => {
     const { shippingAddress, billingAddress, sameAsShipping } = formData
 
-    // Validate shipping address
     if (!shippingAddress.name || !shippingAddress.phone || !shippingAddress.street1 ||
       !shippingAddress.city || !shippingAddress.state || !shippingAddress.postalCode) {
       toast.error('Please fill in all required shipping address fields')
       return false
     }
 
-    // Validate billing address if different from shipping
     if (!sameAsShipping) {
       if (!billingAddress.name || !billingAddress.phone || !billingAddress.street1 ||
         !billingAddress.city || !billingAddress.state || !billingAddress.postalCode) {
@@ -205,58 +196,24 @@ export default function CheckoutPage() {
     
     try {
       if (errorType === 'failed') {
-        setErrorMessage('Payment failed. Your order is saved for retry...')
-        
-        // Log payment failure for debugging (client-side only)
-        console.log('Payment failed:', {
-          orderId,
-          error: errorDetails,
-          timestamp: new Date().toISOString()
-        })
-
-        await new Promise(resolve => setTimeout(resolve, 1500))
-        setErrorMessage('Redirecting to orders...')
-        await new Promise(resolve => setTimeout(resolve, 500))
-        
-        // SECURITY: Don't update payment status from client side!
-        // Payment status is handled by server-side verification only
-        toast.error('Payment failed. Your order is saved and you can retry payment from your orders page.')
-        router.push(`/orders?highlight=${orderId}&status=payment_failed`)
-        
-      } else if (errorType === 'cancelled') {
-        setErrorMessage('Payment cancelled. Your order is saved...')
-        
-        console.log('Payment cancelled:', {
-          orderId,
-          timestamp: new Date().toISOString()
-        })
-
+        setErrorMessage('Payment failed. Saving your order...')
         await new Promise(resolve => setTimeout(resolve, 1000))
         
-        // Don't clear cart immediately - give user options
-        const shouldRetry = window.confirm(
-          'Payment was cancelled. Would you like to:\n' +
-          '• Click OK to retry payment now\n' +
-          '• Click Cancel to go to your orders page'
-        )
+        toast.error('Payment failed. You can retry payment from your orders page.')
+        // Redirect directly to the specific order details page where they can retry
+        router.push(`/orders/${orderId}?status=payment_failed`)
         
-        if (shouldRetry) {
-          // User wants to retry - just close the overlay and let them try again
-          setIsProcessingError(false)
-          setErrorMessage('')
-          toast('You can retry payment by clicking the payment button again.')
-          return
-        } else {
-          // User wants to go to orders
-          setErrorMessage('Redirecting to orders...')
-          await new Promise(resolve => setTimeout(resolve, 500))
-          router.push(`/orders?highlight=${orderId}&status=payment_cancelled`)
-        }
+      } else if (errorType === 'cancelled') {
+        setErrorMessage('Payment cancelled. Saving your order...')
+        await new Promise(resolve => setTimeout(resolve, 800))
+        
+        toast('Payment was cancelled. Your order has been saved.')
+        
+        // 🚀 STANDARD UX: Take them out of checkout into the order details view
+        router.push(`/orders/${orderId}?status=payment_cancelled`)
       }
     } catch (error) {
       console.error('Error during payment error handling:', error)
-      
-      // Simple fallback - just go to orders page with a general error message
       toast.error(`Payment ${errorType}. Please check your orders page.`)
       router.push('/orders')
     } finally {
@@ -273,7 +230,6 @@ export default function CheckoutPage() {
     setIsLoading(true)
 
     try {
-      // Save addresses if they're new
       const addressesToSave = [formData.shippingAddress]
       if (!formData.sameAsShipping) {
         addressesToSave.push(formData.billingAddress)
@@ -283,36 +239,16 @@ export default function CheckoutPage() {
         if (!address.id) {
           await fetch('/api/user/addresses', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(address),
           })
         }
       }
 
-      // Create order
-      // const orderData = {
-      //   items: items.map(item => ({
-      //     productId: item.id,
-      //     quantity: item.quantity,
-      //     price: item.price,
-      //     name: item.name
-      //   })),
-      //   shippingAddress: formData.shippingAddress,
-      //   billingAddress: formData.sameAsShipping ? formData.shippingAddress : formData.billingAddress,
-      //   paymentMethod: formData.paymentMethod,
-      //   notes: formData.notes,
-      //   totalAmount: subtotal + shippingFee
-      // }
-
-      // --- 1️⃣ Create internal order ---
       const orderData = {
         items: items.map(item => ({
           productId: item.id,
           quantity: item.quantity,
-          price: item.price,
-          name: item.name
         })),
         shippingAddress: formData.shippingAddress,
         billingAddress: formData.sameAsShipping
@@ -320,14 +256,11 @@ export default function CheckoutPage() {
           : formData.billingAddress,
         paymentMethod: formData.paymentMethod,
         notes: formData.notes,
-        totalAmount: subtotal + shippingFee
       };
 
       const response = await fetch('/api/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderData),
       })
 
@@ -336,7 +269,6 @@ export default function CheckoutPage() {
         throw new Error(error.error || 'Failed to create order')
       }
 
-      // const order = await response.json();
       const internalOrder = await response.json();
 
       const ok = await loadScript("https://checkout.razorpay.com/v1/checkout.js");
@@ -345,25 +277,19 @@ export default function CheckoutPage() {
         return;
       }
 
-      // --- 3️⃣ Create secure Razorpay order ---
       const rzpOrderRes = await fetch("/api/razorpay/order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: subtotal + shippingFee,
-          orderId: internalOrder.id,
-          receipt: `receipt_${internalOrder.orderNumber}`,
-          notes: {
-            customer_name: formData.shippingAddress.name,
-            customer_email: session?.user?.email || "",
-            order_number: internalOrder.orderNumber
-          }
-        })
+        body: JSON.stringify({ orderId: internalOrder.id }),
       });
 
       if (!rzpOrderRes.ok) {
         const errorData = await rzpOrderRes.json();
-        throw new Error(errorData.error || 'Failed to create payment order');
+        // throw new Error(errorData.error || 'Failed to create payment order');
+
+        router.push(`/orders?highlight=${internalOrder.id}&status=error`)
+
+        return;
       }
 
       const rzpOrder = await rzpOrderRes.json();
@@ -375,13 +301,12 @@ export default function CheckoutPage() {
         name: "HomeShoppie",
         description: `Payment for Order ${internalOrder.orderNumber}`,
         order_id: rzpOrder.id,
+        retry: { enabled: false },
         handler: async function (response: any) {
           try {
-            // Show processing state
             setIsProcessingError(true)
             setErrorMessage('Verifying payment...')
 
-            // --- 5️⃣ Verify payment with enhanced security ---
             const verifyRes = await fetch("/api/razorpay/verify", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -398,37 +323,28 @@ export default function CheckoutPage() {
               setErrorMessage('Payment successful! Redirecting...')
               await new Promise(resolve => setTimeout(resolve, 1000))
               
-              // Clear cart and redirect after successful verification
               clearCart()
               router.push(`/order-success?orderId=${verified.order_id}&orderNumber=${verified.order_number}`)
             } else {
               setIsProcessingError(false)
               setErrorMessage('')
-              
-              // Show specific error or generic message
               const errorMsg = verified.error || "Payment verification failed"
               toast.error(`${errorMsg}. Please contact support if amount was deducted.`)
-              
-              // Redirect to orders page with error status
               router.push(`/orders?highlight=${internalOrder.id}&status=verification_failed&payment_id=${response.razorpay_payment_id}`)
             }
           } catch (verifyError) {
             console.error('Payment verification error:', verifyError)
             setIsProcessingError(false)
             setErrorMessage('')
-            
             toast.error("Network error during verification. Please check your orders page or contact support.")
-            
-            // Redirect to orders page for manual verification
             router.push(`/orders?highlight=${internalOrder.id}&status=verification_error&payment_id=${response.razorpay_payment_id}`)
           }
         },
         modal: {
           ondismiss: function() {
             toast.error("Payment cancelled. Your order is saved and you can complete payment later.");
-            // Use professional error handling for payment cancellation
             handlePaymentError(internalOrder.id, 'cancelled');
-          }
+          }          
         },
         prefill: {
           name: formData.shippingAddress.name,
@@ -443,29 +359,23 @@ export default function CheckoutPage() {
           color: "#00A96E",
           backdrop_color: "rgba(0, 0, 0, 0.6)"
         },
-        retry: {
-          enabled: true,
-          max_count: 3
-        },
-        timeout: 300, // 5 minutes timeout
+        timeout: 300,
         remember_customer: false
       };
 
-      const payment = new window.Razorpay(options);
+      const payment = new window.Razorpay({ ...options });
       
-      // Enhanced error handling for payment
       payment.on('payment.failed', function (response: any) {
-        console.error('Payment failed:', response.error);
+        // console.error('Payment failed:', response.error);
+
+        // Close Razorpay Checkout modal immediately
+        payment.close();
+
         toast.error(`Payment failed: ${response.error.description}`);
-        
-        // Use professional error handling for payment failure
         handlePaymentError(internalOrder.id, 'failed', response.error);
       });
 
       payment.open();
-
-      // Redirect to payment page
-      // router.push(`/payment?orderId=${internalOrder.id}`)
 
     } catch (error: any) {
       toast.error(error.message || 'Failed to process checkout')
@@ -478,10 +388,10 @@ export default function CheckoutPage() {
     try {
       setIsLoading(true)
       
-      // Fetch server-calculated cart summary and saved addresses in parallel
-      const [cartRes, addressRes] = await fetchAllData();
-
-      console.log("cart res....::", cartRes)
+      const [cartRes, addressRes] = await Promise.all([
+        fetch('/api/cart/summary'),
+        fetch('/api/user/addresses')
+      ]);
 
       if (cartRes.ok) {
         const cartData = await cartRes.json()
@@ -492,12 +402,12 @@ export default function CheckoutPage() {
           return
         }
 
-        // Set trusted server calculations
         setItems(cartData.items)
-        setSubtotal(cartData.subtotal)
-        setShippingFee(cartData.shippingFee)
-        setTotal(cartData.total)
-        setItemCount(cartData.itemCount)
+        setSubtotal(Number(cartData.subtotal) || 0)
+        setShippingFee(Number(cartData.shippingFee) || 0)
+        setTaxAmount(Number(cartData.taxAmount) || 0) // 👈 Hydrating tax from summary API
+        setTotal(Number(cartData.total) || 0)
+        setItemCount(Number(cartData.itemCount) || 0)
       }
 
       if (addressRes.ok) {
@@ -531,14 +441,6 @@ export default function CheckoutPage() {
     }
   }
 
-  // Helper for Promise.all fetch
-  const fetchAllData = () => {
-    return Promise.all([
-      fetch('/api/cart/summary'),
-      fetch('/api/user/addresses')
-    ])
-  }
-
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -553,7 +455,6 @@ export default function CheckoutPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      {/* Professional Error Processing Overlay */}
       {isProcessingError && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-lg shadow-lg max-w-sm w-full mx-4">
@@ -571,14 +472,11 @@ export default function CheckoutPage() {
           <h1 className="text-3xl font-bold text-gray-900 mb-8">Checkout</h1>
 
           <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - Forms */}
             <div className="lg:col-span-2 space-y-8">
-
               {/* Shipping Address */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Shipping Address</h2>
 
-                {/* Saved Addresses */}
                 {savedAddresses.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-sm font-medium text-gray-700 mb-3">Choose from saved addresses</h3>
@@ -826,18 +724,6 @@ export default function CheckoutPage() {
                     />
                     <span className="ml-3">UPI Payment</span>
                   </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="cod"
-                      checked={formData.paymentMethod === 'cod'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                      className="border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-3">Cash on Delivery</span>
-                  </label>
                 </div>
               </div>
 
@@ -860,7 +746,7 @@ export default function CheckoutPage() {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Order Summary</h2>
 
                 {/* Items */}
-                <div className="space-y-3 mb-6">
+                <div className="space-y-3 mb-6 max-h-60 overflow-y-auto pr-1">
                   {items.map((item) => (
                     <div key={item.id} className="flex items-center space-x-3">
                       <div className="flex-shrink-0 w-12 h-12 bg-gray-200 rounded overflow-hidden">
@@ -887,7 +773,7 @@ export default function CheckoutPage() {
                       </div>
 
                       <div className="text-sm font-medium text-gray-900">
-                        ₹{(item.price * item.quantity).toFixed(2)}
+                        ₹{(item.total ?? (item.price * item.quantity)).toFixed(2)}
                       </div>
                     </div>
                   ))}
@@ -905,6 +791,12 @@ export default function CheckoutPage() {
                     <span className={shippingFee === 0 ? 'text-green-600' : ''}>
                       {shippingFee === 0 ? 'FREE' : `₹${shippingFee.toFixed(2)}`}
                     </span>
+                  </div>
+
+                  {/* Tax Amount Line */}
+                  <div className="flex justify-between text-sm">
+                    <span>Tax</span>
+                    <span>₹{taxAmount.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between text-lg font-semibold pt-2 border-t">

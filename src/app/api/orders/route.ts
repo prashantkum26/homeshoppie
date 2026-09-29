@@ -47,12 +47,28 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { items, shippingAddress, paymentMethod, notes, shippingFee = 0 } = body
+    const { items, shippingAddress, paymentMethod, notes } = body;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
       return NextResponse.json(
         { error: 'Items are required' },
+        { status: 400 }
+      )
+    }
+
+    if (paymentMethod?.toLowerCase() === 'cod') {
+      return NextResponse.json(
+        { error: 'COD is not allowed.' },
+        { status: 400 }
+      )
+    }
+
+    const allowedPaymentMethods = ['card', 'upi', 'cod'] as const
+
+    if (!paymentMethod || !allowedPaymentMethods.includes(paymentMethod)) {
+      return NextResponse.json(
+        { error: 'Invalid payment method' },
         { status: 400 }
       )
     }
@@ -67,7 +83,24 @@ export async function POST(request: NextRequest) {
     // Validate shipping address has required fields for tax calculation
     if (!shippingAddress.state) {
       return NextResponse.json(
-        { error: 'Shipping state is required for tax calculation' },
+        { error: 'Shipping state is required.' },
+        { status: 400 }
+      )
+    }
+
+    const recentDuplicate = await prisma.order.findFirst({
+      where: {
+        userId: session.user.id,
+        status: 'PENDING',
+        createdAt: {
+          gte: new Date(Date.now() - 10000) // Last 10 seconds
+        }
+      }
+    })
+
+    if (recentDuplicate) {
+      return NextResponse.json(
+        { error: 'An order is already being processed. Please wait.' },
         { status: 400 }
       )
     }
@@ -80,7 +113,6 @@ export async function POST(request: NextRequest) {
       quantity: number
       category: string
     }> = []
-    let subtotal = 0
 
     for (const item of items) {
       const product = await prisma.product.findUnique({
@@ -92,7 +124,7 @@ export async function POST(request: NextRequest) {
 
       if (!product) {
         return NextResponse.json(
-          { error: `Product not found: ${item.name}` },
+          { error: `Product not found: ${item?.productId}` },
           { status: 400 }
         )
       }
@@ -111,9 +143,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      const itemTotal = product.price * item.quantity
-      subtotal += itemTotal
-
       validatedItems.push({
         id: product.id,
         name: product.name,
@@ -122,6 +151,10 @@ export async function POST(request: NextRequest) {
         category: product.category.name
       })
     }
+
+    const subtotal = Number(validatedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0).toFixed(2));
+
+    const shippingFee = subtotal > 500 ? 0 : 50;
 
     // Calculate taxes
     const taxCalculation = await calculateOrderTax({
@@ -136,7 +169,9 @@ export async function POST(request: NextRequest) {
       userId: session.user.id
     })
 
-    const totalAmount = taxCalculation.finalTotal
+    console.log("......................................:::", taxCalculation)
+
+    const totalAmount = Number(taxCalculation.finalTotal.toFixed(2))
 
     // Create the order with address and items
     const order = await prisma.$transaction(async (tx) => {
@@ -157,7 +192,19 @@ export async function POST(request: NextRequest) {
             type: shippingAddress.type || 'HOME'
           }
         })
+
         addressId = createdAddress.id
+      } else {
+        const existingAddress = await tx.address.findFirst({
+          where: { id: shippingAddress.id, userId: session.user.id },
+          select: { id: true }
+        })
+
+        if (!existingAddress) {
+          throw new Error('Invalid shipping address')
+        }
+
+        addressId = existingAddress.id
       }
 
       // Generate unique order number

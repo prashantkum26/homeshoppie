@@ -2,13 +2,11 @@ import { createSecureOrder, validatePaymentAmount, retryOperation } from "@/lib/
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { 
-  logSecurityEvent, 
-  checkEnhancedRateLimit, 
+import {
+  logSecurityEvent,
+  checkEnhancedRateLimit,
   getClientIP,
-  toCurrencyUnit,
-  // fromCurrencyUnit,
-  // logPaymentOperation 
+  toCurrencyUnit
 } from "@/lib/auditTrail";
 
 export async function POST(req: NextRequest) {
@@ -32,7 +30,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Rate limiting check
     const rateLimit = await checkEnhancedRateLimit(ipAddress, '/api/razorpay/order', session.user.id, 5, 1);
     if (!rateLimit.allowed) {
       await logSecurityEvent({
@@ -62,34 +59,12 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { amount, orderId, receipt, notes } = body;
+    const { orderId } = body;
 
     // Validate required fields
-    if (!amount || !orderId) {
+    if (!orderId) {
       return NextResponse.json(
-        { error: 'Amount and orderId are required' },
-        { status: 400 }
-      );
-    }
-
-    // Validate amount
-    const amountValidation = validatePaymentAmount(amount);
-    if (!amountValidation.valid) {
-      await logSecurityEvent({
-        userId: session.user.id,
-        action: 'SUSPICIOUS_ACTIVITY',
-        ipAddress,
-        severity: 'MEDIUM',
-        details: {
-          endpoint: '/api/razorpay/order',
-          reason: 'Invalid payment amount',
-          amount,
-          error: amountValidation.error
-        }
-      });
-
-      return NextResponse.json(
-        { error: amountValidation.error },
+        { error: 'OrderId is required.' },
         { status: 400 }
       );
     }
@@ -122,6 +97,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (internalOrder.paymentStatus === "PAID") {
+        await logSecurityEvent({
+          userId: session.user.id,
+          action: "SUSPICIOUS_ACTIVITY",
+          ipAddress,
+          severity: "HIGH",
+          details: {
+            endpoint: "/api/razorpay/order",
+            reason:
+              "Attempted payment creation for already-paid order",
+            orderId: internalOrder.id,
+            orderStatus:
+              internalOrder.paymentStatus,
+          },
+          blocked: true,
+        });
+
+        return NextResponse.json(
+          {
+            error:
+              "Order has already been paid.",
+            code: "ORDER_ALREADY_PAID",
+          },
+          { status: 400 }
+        );
+      }
+
     // SECURITY CHECK: Verify order payment status and attempt limits
     const existingPaymentLog = await prisma.paymentLog.findFirst({
       where: {
@@ -153,6 +155,17 @@ export async function POST(req: NextRequest) {
         error: 'Order has already been paid. Cannot create new payment.',
         code: 'ORDER_ALREADY_PAID'
       }, { status: 400 });
+    }
+
+    const amount = internalOrder.totalAmount;
+    const amountValidation = validatePaymentAmount(amount);
+    console.log("Total amount = ", amount, amountValidation)
+
+    if (!amountValidation.valid) {
+      return NextResponse.json(
+        { error: "Invalid order amount" },
+        { status: 400 }
+      );
     }
 
     // SECURITY: Limit retry attempts (max 5 attempts per order)
@@ -216,13 +229,11 @@ export async function POST(req: NextRequest) {
         amount,
         orderId: internalOrder.id,
         userId: session.user.id,
-        receipt: receipt || `receipt_${internalOrder.orderNumber}`,
+        receipt: `receipt_${internalOrder.orderNumber}`,
         notes: {
-          ...notes,
-          order_number: internalOrder.orderNumber,
-          customer_email: session.user.email || '',
-          customer_name: session.user.name || '',
-        }
+          order_number: internalOrder.orderNumber
+        },
+        paymentMethod: internalOrder?.paymentMethod?.toLowerCase() || 'card'
       });
     });
 
@@ -266,13 +277,13 @@ export async function POST(req: NextRequest) {
       // Handle unique constraint violations gracefully
       if (dbError.code === 'P2002') {
         const target = dbError.meta?.target;
-        
+
         if (target?.includes('order_razorpay_attempt')) {
           console.warn('Duplicate order+razorpay combination handled:', {
             orderId: internalOrder.id,
             razorpayOrderId: razorpayOrder.id
           });
-          
+
           // Find and use existing payment log
           const existingLog = await prisma.paymentLog.findFirst({
             where: {
@@ -280,7 +291,7 @@ export async function POST(req: NextRequest) {
               razorpayOrderId: razorpayOrder.id
             }
           });
-          
+
           if (existingLog) {
             console.log('Using existing payment log after constraint violation');
           } else {

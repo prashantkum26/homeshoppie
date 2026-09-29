@@ -17,7 +17,7 @@ interface Order {
     id: string
     name: string
     quantity: number
-    price: number
+    unitPrice: number
   }[]
 }
 
@@ -293,7 +293,7 @@ export default function Dashboard() {
                             {order.orderItems.map((item) => (
                               <li key={item.id} className="flex justify-between">
                                 <span>{item.name} × {item.quantity}</span>
-                                <span>₹{(item.price * item.quantity).toFixed(2)}</span>
+                                <span>₹{(item?.unitPrice * item.quantity).toFixed(2)}</span>
                               </li>
                             ))}
                           </ul>

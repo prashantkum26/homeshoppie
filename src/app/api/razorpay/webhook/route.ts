@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    console.log("event....::", event)
+
     // Handle different webhook events
     switch (eventType) {
       case 'payment.authorized':
@@ -122,6 +124,7 @@ export async function POST(req: NextRequest) {
 
 async function handlePaymentSuccess(paymentEntity: any) {
   try {
+    console.log("paymentEntity....::", paymentEntity)
     const { id: paymentId, order_id: razorpayOrderId, amount, method } = paymentEntity;
 
     // Find payment log
@@ -392,11 +395,16 @@ async function handleOrderPaid(orderEntity: any) {
   try {
     const { id: razorpayOrderId, amount_paid, status } = orderEntity;
 
+    console.log("orderEntity....::", orderEntity)
+    console.log("amount_paid....::", amount_paid)
+
     // Find payment log
     const paymentLog = await prisma.paymentLog.findFirst({
       where: { razorpayOrderId },
       include: { order: true }
     });
+
+    console.log("paymentLog....::", paymentLog)
 
     if (!paymentLog) {
       console.error('Payment log not found for Razorpay order:', razorpayOrderId);
@@ -404,7 +412,8 @@ async function handleOrderPaid(orderEntity: any) {
     }
 
     // Double-check that the order is fully paid
-    if (status === 'paid' && amount_paid >= paymentLog.amount * 100) {
+    if (status === 'paid' && amount_paid == paymentLog.amount) {
+      // console.log("Enter the condition....::")
       await prisma.$transaction(async (tx) => {
         await tx.paymentLog.update({
           where: { id: paymentLog.id },
@@ -441,29 +450,8 @@ async function handleOrderPaid(orderEntity: any) {
     }
 
   } catch (error: any) {
+    console.log(error, "....::")
     console.error('Failed to process order paid:', error);
     throw error;
   }
-}
-
-// Only allow POST requests
-export async function GET() {
-  return NextResponse.json(
-    { error: 'Method not allowed' },
-    { status: 405 }
-  );
-}
-
-export async function PUT() {
-  return NextResponse.json(
-    { error: 'Method not allowed' },
-    { status: 405 }
-  );
-}
-
-export async function DELETE() {
-  return NextResponse.json(
-    { error: 'Method not allowed' },
-    { status: 405 }
-  );
 }

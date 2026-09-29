@@ -597,6 +597,14 @@ model SavedForLater {
 // ORDER MANAGEMENT & FULFILLMENT
 // ============================================================================
 
+enum PaymentMethod {
+  netbanking
+  upi
+  card
+  emandate
+  nach
+}
+
 model Order {
   id              String      @id @default(auto()) @map("_id") @db.ObjectId
   orderNumber     String      @unique
@@ -608,7 +616,7 @@ model Order {
   fulfillmentStatus FulfillmentStatus @default(UNFULFILLED)
   
   // Payment Information
-  paymentMethod   String
+  paymentMethod   PaymentMethod
   paymentStatus   PaymentStatus @default(PENDING)
   paymentIntentId String?
   
