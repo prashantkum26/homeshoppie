@@ -603,6 +603,7 @@ enum PaymentMethod {
   card
   emandate
   nach
+  wallet
 }
 
 model Order {

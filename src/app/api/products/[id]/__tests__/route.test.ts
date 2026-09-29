@@ -1,18 +1,20 @@
 import { NextRequest } from 'next/server'
 import { GET } from '../route'
+import { prisma } from '@/lib/prisma'
 
 // Mock Prisma
-const mockFindUnique = jest.fn()
-const mockFindMany = jest.fn()
-
 jest.mock('@/lib/prisma', () => ({
   prisma: {
     product: {
-      findUnique: mockFindUnique,
-      findMany: mockFindMany,
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
     },
   },
 }))
+
+const mockPrisma = prisma as any
+const mockFindFirst = mockPrisma.product.findFirst
+const mockFindMany = mockPrisma.product.findMany
 
 describe('/api/products/[id] - GET', () => {
   beforeEach(() => {
@@ -53,7 +55,7 @@ describe('/api/products/[id] - GET', () => {
   ]
 
   it('should return product by id successfully', async () => {
-    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindFirst.mockResolvedValue(mockProduct as any)
     mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/1')
@@ -65,28 +67,44 @@ describe('/api/products/[id] - GET', () => {
     expect(data.inStock).toBe(true)
     expect(data.discountPercent).toBe(17) // (120-100)/120 * 100 = 16.67 rounded to 17
     expect(data.relatedProducts).toHaveLength(1)
-    expect(mockFindUnique).toHaveBeenCalledWith({
-      where: { OR: [{ id: '1' }, { slug: '1' }] },
+    // '1' is not a valid 24-char ObjectId, so the route looks it up by slug.
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { slug: '1' },
       include: { category: { select: { name: true, slug: true } } },
     })
   })
 
   it('should return product by slug successfully', async () => {
-    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindFirst.mockResolvedValue(mockProduct as any)
     mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/test-product')
     const response = await GET(request, { params: Promise.resolve({ id: 'test-product' }) })
 
     expect(response.status).toBe(200)
-    expect(mockFindUnique).toHaveBeenCalledWith({
-      where: { OR: [{ id: 'test-product' }, { slug: 'test-product' }] },
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { slug: 'test-product' },
+      include: { category: { select: { name: true, slug: true } } },
+    })
+  })
+
+  it('should return product by ObjectId successfully', async () => {
+    mockFindFirst.mockResolvedValue(mockProduct as any)
+    mockFindMany.mockResolvedValue(mockRelatedProducts as any)
+
+    const objectId = '507f1f77bcf86cd799439011'
+    const request = new NextRequest(`http://localhost/api/products/${objectId}`)
+    const response = await GET(request, { params: Promise.resolve({ id: objectId }) })
+
+    expect(response.status).toBe(200)
+    expect(mockFindFirst).toHaveBeenCalledWith({
+      where: { id: objectId },
       include: { category: { select: { name: true, slug: true } } },
     })
   })
 
   it('should return 404 when product not found', async () => {
-    mockFindUnique.mockResolvedValue(null)
+    mockFindFirst.mockResolvedValue(null)
 
     const request = new NextRequest('http://localhost/api/products/nonexistent')
     const response = await GET(request, { params: Promise.resolve({ id: 'nonexistent' }) })
@@ -98,7 +116,7 @@ describe('/api/products/[id] - GET', () => {
 
   it('should return 404 when product is inactive', async () => {
     const inactiveProduct = { ...mockProduct, isActive: false }
-    mockFindUnique.mockResolvedValue(inactiveProduct as any)
+    mockFindFirst.mockResolvedValue(inactiveProduct as any)
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -110,7 +128,7 @@ describe('/api/products/[id] - GET', () => {
 
   it('should handle products without compareAtPrice: price', async () => {
     const productWithoutCompareAt = { ...mockProduct, compareAtPrice: null }
-    mockFindUnique.mockResolvedValue(productWithoutCompareAt as any)
+    mockFindFirst.mockResolvedValue(productWithoutCompareAt as any)
     mockFindMany.mockResolvedValue([])
 
     const request = new NextRequest('http://localhost/api/products/1')
@@ -123,7 +141,7 @@ describe('/api/products/[id] - GET', () => {
 
   it('should handle out-of-stock products', async () => {
     const outOfStockProduct = { ...mockProduct, stock: 0 }
-    mockFindUnique.mockResolvedValue(outOfStockProduct as any)
+    mockFindFirst.mockResolvedValue(outOfStockProduct as any)
     mockFindMany.mockResolvedValue([])
 
     const request = new NextRequest('http://localhost/api/products/1')
@@ -135,7 +153,7 @@ describe('/api/products/[id] - GET', () => {
   })
 
   it('should return 500 on database error', async () => {
-    mockFindUnique.mockRejectedValue(new Error('Database error'))
+    mockFindFirst.mockRejectedValue(new Error('Database error'))
 
     const request = new NextRequest('http://localhost/api/products/1')
     const response = await GET(request, { params: Promise.resolve({ id: '1' }) })
@@ -146,7 +164,7 @@ describe('/api/products/[id] - GET', () => {
   })
 
   it('should fetch related products correctly', async () => {
-    mockFindUnique.mockResolvedValue(mockProduct as any)
+    mockFindFirst.mockResolvedValue(mockProduct as any)
     mockFindMany.mockResolvedValue(mockRelatedProducts as any)
 
     const request = new NextRequest('http://localhost/api/products/1')

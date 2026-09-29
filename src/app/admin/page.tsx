@@ -154,36 +154,6 @@ export default function AdminDashboard() {
     }
   }
 
-  const toggleProductStatus = async (productId: string, isActive: boolean) => {
-    try {
-      const response = await fetch(`/api/admin/products/${productId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !isActive }),
-      })
-      if (!response.ok) throw new Error('Failed to update product status')
-      fetchAdminData()
-      toast.success('Product status updated successfully')
-    } catch (error) {
-      toast.error('Failed to update product status')
-    }
-  }
-
-  const updateUserRole = async (userId: string, newRole: string) => {
-    try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: newRole }),
-      })
-      if (!response.ok) throw new Error('Failed to update user role')
-      fetchAdminData()
-      toast.success('User role updated successfully')
-    } catch (error) {
-      toast.error('Failed to update user role')
-    }
-  }
-
   if (status === 'loading' || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

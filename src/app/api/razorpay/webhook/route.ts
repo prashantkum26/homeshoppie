@@ -189,7 +189,8 @@ async function handlePaymentSuccess(paymentEntity: any) {
           internalMethod = 'wallet';
           break;
         default:
-          internalMethod = method.toLowerCase();
+          // Unknown/unsupported method – keep original enum value
+          break;
       }
     }
 

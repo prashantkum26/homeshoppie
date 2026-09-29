@@ -224,6 +224,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Create secure Razorpay order with retry mechanism
+    // Note: Razorpay's order-creation "method" restriction does not support "wallet",
+    // so omit the restriction in that case and let the checkout widget offer all methods.
+    const orderMethodRestriction =
+      internalOrder.paymentMethod !== 'wallet' ? internalOrder.paymentMethod : undefined;
+
     const razorpayOrder = await retryOperation(async () => {
       return await createSecureOrder({
         amount,
@@ -233,7 +238,7 @@ export async function POST(req: NextRequest) {
         notes: {
           order_number: internalOrder.orderNumber
         },
-        paymentMethod: internalOrder?.paymentMethod?.toLowerCase() || 'card'
+        paymentMethod: orderMethodRestriction
       });
     });
 

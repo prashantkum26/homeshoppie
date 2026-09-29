@@ -388,9 +388,6 @@ const useCartStore = create<CartStore>()(
         const isLoggedIn = get().isLoggedIn
 
         if (!isLoggedIn) {
-          const previousItems =
-            get().guestItems
-
           set((state) => ({
             guestItems:
               state.guestItems.map((item) =>

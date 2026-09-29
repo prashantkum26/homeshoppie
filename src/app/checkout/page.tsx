@@ -191,7 +191,7 @@ export default function CheckoutPage() {
     return true
   }
 
-  const handlePaymentError = async (orderId: string, errorType: 'failed' | 'cancelled', errorDetails?: any) => {
+  const handlePaymentError = async (orderId: string, errorType: 'failed' | 'cancelled', _errorDetails?: any) => {
     setIsProcessingError(true)
     
     try {
@@ -284,9 +284,6 @@ export default function CheckoutPage() {
       });
 
       if (!rzpOrderRes.ok) {
-        const errorData = await rzpOrderRes.json();
-        // throw new Error(errorData.error || 'Failed to create payment order');
-
         router.push(`/orders?highlight=${internalOrder.id}&status=error`)
 
         return;

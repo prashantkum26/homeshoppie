@@ -300,7 +300,7 @@ export const createSecureOrder = async (params: {
   userId: string;
   receipt?: string;
   notes?: Record<string, string>;
-  paymentMethod: "netbanking" | "upi" | "card" | "emandate" | "nach";
+  paymentMethod?: "netbanking" | "upi" | "card" | "emandate" | "nach" | undefined;
 }) => {
   const {
     amount,
@@ -365,7 +365,10 @@ export const createSecureOrder = async (params: {
      */
     const razorpay = getRazorpay();
 
-    const order = await razorpay.orders.create({ ...orderOptions, method: paymentMethod });
+    const orderPayload = paymentMethod
+      ? { ...orderOptions, method: paymentMethod }
+      : orderOptions;
+    const order = await razorpay.orders.create(orderPayload);
 
     console.log("Secure Razorpay order created:",
       {
