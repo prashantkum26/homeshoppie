@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// GET user's cart
-export async function GET(_request: NextRequest) {
+/**
+ * GET /api/cart
+ *
+ * Get the authenticated user's cart.
+ */
+export async function GET() {
   try {
     const session = await auth()
 
@@ -15,24 +19,29 @@ export async function GET(_request: NextRequest) {
     }
 
     const cartItems = await prisma.cartItem.findMany({
-      where: { userId: session.user.id },
+      where: {
+        userId: session.user.id,
+      },
       include: {
         product: {
           include: {
             category: {
               select: {
-                name: true
-              }
-            }
-          }
-        }
+                name: true,
+              },
+            },
+          },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: {
+        createdAt: 'asc',
+      },
     })
 
     return NextResponse.json(cartItems)
   } catch (error) {
-    console.error('Error fetching cart:', error)
+    console.error('GET /api/cart error:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -40,7 +49,17 @@ export async function GET(_request: NextRequest) {
   }
 }
 
-// POST add item to cart
+/**
+ * POST /api/cart
+ *
+ * Add a product to the authenticated user's cart.
+ *
+ * If the product already exists:
+ *   quantity is incremented.
+ *
+ * If it doesn't exist:
+ *   a new CartItem is created.
+ */
 export async function POST(request: NextRequest) {
   try {
     const session = await auth()
@@ -53,25 +72,36 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { productId, quantity = 1 } = body
 
-    if (!productId) {
+    const productId = body?.productId
+    const quantity = body?.quantity
+
+    if (
+      typeof productId !== 'string' ||
+      !productId.trim()
+    ) {
       return NextResponse.json(
         { error: 'Product ID is required' },
         { status: 400 }
       )
     }
 
-    if (quantity < 1) {
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
       return NextResponse.json(
-        { error: 'Quantity must be at least 1' },
+        { error: 'Quantity must be a positive integer' },
         { status: 400 }
       )
     }
 
-    // Check if product exists and is active
-    const product = await prisma.product.findUnique({
-      where: { id: productId }
+    const product = await prisma.product.findFirst({
+      where: {
+        id: productId,
+        isActive: true
+      },
     })
 
     if (!product) {
@@ -81,81 +111,92 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!product.isActive) {
+    if (
+      product.trackInventory &&
+      !product.allowBackorder &&
+      quantity > product.stock
+    ) {
       return NextResponse.json(
-        { error: 'Product is not available' },
+        { error: 'Insufficient stock available' },
         { status: 400 }
       )
     }
 
-    if (product.stock < quantity) {
-      return NextResponse.json(
-        { error: 'Insufficient stock' },
-        { status: 400 }
-      )
-    }
-
-    // Check if item already exists in cart
-    const existingCartItem = await prisma.cartItem.findUnique({
+    const existingCartItem = await prisma.cartItem.findFirst({
       where: {
-        userId_productId: {
-          userId: session.user.id,
-          productId: productId
-        }
-      }
+        userId: session.user.id,
+        productId,
+      },
     })
 
     let cartItem
 
     if (existingCartItem) {
       const newQuantity = existingCartItem.quantity + quantity
-      
-      if (newQuantity > product.stock) {
+
+      if (
+        product.trackInventory &&
+        !product.allowBackorder &&
+        newQuantity > product.stock
+      ) {
         return NextResponse.json(
-          { error: 'Cannot add more items than available in stock' },
+          {
+            error: 'Insufficient stock available',
+            availableStock: product.stock,
+          },
           { status: 400 }
         )
       }
 
       cartItem = await prisma.cartItem.update({
-        where: { id: existingCartItem.id },
-        data: { quantity: newQuantity },
-        include: {
-          product: {
-            include: {
-              category: {
-                select: {
-                  name: true
-                }
-              }
-            }
-          }
-        }
-      })
-    } else {
-      cartItem = await prisma.cartItem.create({
+        where: {
+          id: existingCartItem.id,
+        },
         data: {
-          userId: session.user.id,
-          productId: productId,
-          quantity: quantity
+          quantity: newQuantity,
+          priceSnapshot: product.price,
+          deletedAt: null,
         },
         include: {
           product: {
             include: {
               category: {
                 select: {
-                  name: true
-                }
-              }
-            }
-          }
-        }
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      })
+    } else {
+      cartItem = await prisma.cartItem.create({
+        data: {
+          userId: session.user.id,
+          productId,
+          quantity,
+          priceSnapshot: product.price,
+        },
+        include: {
+          product: {
+            include: {
+              category: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
       })
     }
 
-    return NextResponse.json(cartItem, { status: 201 })
+    return NextResponse.json(cartItem, {
+      status: existingCartItem ? 200 : 201,
+    })
   } catch (error) {
-    console.error('Error adding to cart:', error)
+    console.error('POST /api/cart error:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -163,7 +204,11 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE clear cart
+/**
+ * DELETE /api/cart
+ *
+ * Clear the authenticated user's entire cart.
+ */
 export async function DELETE() {
   try {
     const session = await auth()
@@ -176,12 +221,17 @@ export async function DELETE() {
     }
 
     await prisma.cartItem.deleteMany({
-      where: { userId: session.user.id }
+      where: {
+        userId: session.user.id,
+      },
     })
 
-    return NextResponse.json({ message: 'Cart cleared successfully' })
+    return NextResponse.json({
+      message: 'Cart cleared successfully',
+    })
   } catch (error) {
-    console.error('Error clearing cart:', error)
+    console.error('DELETE /api/cart error:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

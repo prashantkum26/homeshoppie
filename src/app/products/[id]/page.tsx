@@ -106,7 +106,7 @@ export default function ProductPage() {
     }
   }, [id])
 
-  const handleAddToCart = () => {
+  const handleAddToCart = async () => {
     if (!product?.inStock) {
       toast.error('Product is out of stock')
       return
@@ -131,7 +131,7 @@ export default function ProductPage() {
       updatedAt: new Date()
     }
     
-    addItem(productForCart)
+    await addItem(productForCart, 1)
     toast.success(`Added ${quantity} ${quantity === 1 ? 'item' : 'items'} to cart!`)
   }
 

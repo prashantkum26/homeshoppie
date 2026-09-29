@@ -14,17 +14,17 @@ export default function CartPage() {
   const { items, updateQuantity, removeItem, clearCart, getTotal, getTotalItems } = useCartStore()
   const [isLoading, _setIsLoading] = useState(false)
 
-  const handleQuantityChange = (productId: string, newQuantity: number) => {
+  const handleQuantityChange = async (productId: string, newQuantity: number) => {
     if (newQuantity < 1) {
-      removeItem(productId)
+      await removeItem(productId)
       toast.success('Item removed from cart')
     } else {
-      updateQuantity(productId, newQuantity)
+      await updateQuantity(productId, newQuantity)
     }
   }
 
-  const handleRemoveItem = (productId: string, productName: string) => {
-    removeItem(productId)
+  const handleRemoveItem = async (productId: string, productName: string) => {
+    await removeItem(productId)
     toast.success(`${productName} removed from cart`)
   }
 
@@ -132,7 +132,11 @@ export default function CartPage() {
                 <div className="flex items-center space-x-4">
                   <div className="flex items-center border border-gray-300 rounded-md">
                     <button
-                      onClick={() => handleQuantityChange(item.id, item.quantity - 1)}
+                      onClick={() => {
+                        if (item.quantity > 1) {
+                          handleQuantityChange(item.id, item.quantity - 1)
+                        }
+                      }}
                       className="p-2 hover:bg-gray-50 text-gray-600"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

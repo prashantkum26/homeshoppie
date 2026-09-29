@@ -192,6 +192,7 @@ export default function Header() {
                           onClick={() => {
                             signOut()
                             setUserMenuOpen(false)
+                            useCartStore.getState().clearLocalCart()
                           }}
                           className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         >
@@ -298,6 +299,7 @@ export default function Header() {
                       onClick={() => {
                         signOut()
                         setMobileMenuOpen(false)
+                        useCartStore.getState().clearLocalCart()
                       }}
                       className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block w-full text-left px-3 py-2 rounded-md text-base font-medium"
                     >

@@ -2,10 +2,24 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 
-// PATCH update cart item quantity
+interface RouteContext {
+  params: Promise<{
+    id: string
+  }>
+}
+
+/**
+ * PATCH /api/cart/:id
+ *
+ * Update quantity of one CartItem.
+ *
+ * IMPORTANT:
+ * :id = CartItem.id
+ * NOT Product.id
+ */
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const session = await auth()
@@ -17,26 +31,39 @@ export async function PATCH(
       )
     }
 
-    const cartItemId = (await params).id
-    const body = await request.json()
-    const { quantity } = body
+    const { id: cartItemId } = await params
 
-    if (!quantity || quantity < 1) {
+    if (!cartItemId) {
       return NextResponse.json(
-        { error: 'Quantity must be at least 1' },
+        { error: 'Cart item ID is required' },
         { status: 400 }
       )
     }
 
-    // Verify cart item belongs to user
+    const body = await request.json()
+    const quantity = body?.quantity
+
+    if (
+      typeof quantity !== 'number' ||
+      !Number.isInteger(quantity) ||
+      quantity < 1
+    ) {
+      return NextResponse.json(
+        {
+          error: 'Quantity must be a positive integer',
+        },
+        { status: 400 }
+      )
+    }
+
     const cartItem = await prisma.cartItem.findFirst({
       where: {
         id: cartItemId,
-        userId: session.user.id
+        userId: session.user.id,
       },
       include: {
-        product: true
-      }
+        product: true,
+      },
     })
 
     if (!cartItem) {
@@ -46,33 +73,48 @@ export async function PATCH(
       )
     }
 
-    // Check stock availability
-    if (quantity > cartItem.product.stock) {
+    const product = cartItem.product
+
+    if (
+      product.trackInventory &&
+      !product.allowBackorder &&
+      quantity > product.stock
+    ) {
       return NextResponse.json(
-        { error: 'Insufficient stock available' },
+        {
+          error: 'Insufficient stock available',
+          availableStock: product.stock,
+        },
         { status: 400 }
       )
     }
 
     const updatedCartItem = await prisma.cartItem.update({
-      where: { id: cartItemId },
-      data: { quantity },
+      where: {
+        id: cartItemId,
+      },
+      data: {
+        quantity,
+        priceSnapshot: product.price,
+        deletedAt: null,
+      },
       include: {
         product: {
           include: {
             category: {
               select: {
-                name: true
-              }
-            }
-          }
-        }
-      }
+                name: true,
+              },
+            },
+          },
+        },
+      },
     })
 
     return NextResponse.json(updatedCartItem)
   } catch (error) {
-    console.error('Error updating cart item:', error)
+    console.error('PATCH /api/cart/[id] error:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -80,10 +122,18 @@ export async function PATCH(
   }
 }
 
-// DELETE remove item from cart
+/**
+ * DELETE /api/cart/:id
+ *
+ * Remove ONE CartItem.
+ *
+ * IMPORTANT:
+ * :id = CartItem.id
+ * NOT Product.id
+ */
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: RouteContext
 ) {
   try {
     const session = await auth()
@@ -95,14 +145,20 @@ export async function DELETE(
       )
     }
 
-    const cartItemId = (await params).id
+    const { id: cartItemId } = await params
 
-    // Verify cart item belongs to user and delete
+    if (!cartItemId) {
+      return NextResponse.json(
+        { error: 'Cart item ID is required' },
+        { status: 400 }
+      )
+    }
+
     const deletedCartItem = await prisma.cartItem.deleteMany({
       where: {
         id: cartItemId,
-        userId: session.user.id
-      }
+        userId: session.user.id,
+      },
     })
 
     if (deletedCartItem.count === 0) {
@@ -112,9 +168,12 @@ export async function DELETE(
       )
     }
 
-    return NextResponse.json({ message: 'Item removed from cart successfully' })
+    return NextResponse.json({
+      message: 'Item removed from cart successfully',
+    })
   } catch (error) {
-    console.error('Error removing cart item:', error)
+    console.error('DELETE /api/cart/[id] error:', error)
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

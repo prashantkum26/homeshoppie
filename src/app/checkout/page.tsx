@@ -33,7 +33,15 @@ interface CheckoutForm {
 export default function CheckoutPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const { items, getTotal, getTotalItems, clearCart } = useCartStore()
+  const { clearCart } = useCartStore();
+
+  //----------
+  const [items, setItems] = useState<any[]>([])
+  const [subtotal, setSubtotal] = useState(0)
+  const [shippingFee, setShippingFee] = useState(0)
+  const [total, setTotal] = useState(0)
+  const [itemCount, setItemCount] = useState(0)
+
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessingError, setIsProcessingError] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
@@ -72,14 +80,25 @@ export default function CheckoutPage() {
       return
     }
 
-    if (items.length === 0) {
-      router.push('/cart')
-      toast.error('Your cart is empty')
-      return
-    }
+    // if (items.length === 0) {
+    //   router.push('/cart')
+    //   toast.error('Your cart is empty')
+    //   return
+    // }
 
     fetchSavedAddresses()
   }, [status, items.length, router])
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/auth/signin?callbackUrl=/checkout')
+      return
+    }
+
+    if (status === 'authenticated') {
+      fetchCheckoutData()
+    }
+  }, [status, router])
 
   const fetchSavedAddresses = async () => {
     try {
@@ -455,6 +474,71 @@ export default function CheckoutPage() {
     }
   }
 
+  const fetchCheckoutData = async () => {
+    try {
+      setIsLoading(true)
+      
+      // Fetch server-calculated cart summary and saved addresses in parallel
+      const [cartRes, addressRes] = await fetchAllData();
+
+      console.log("cart res....::", cartRes)
+
+      if (cartRes.ok) {
+        const cartData = await cartRes.json()
+        
+        if (!cartData.items || cartData.items.length === 0) {
+          toast.error('Your cart is empty')
+          router.push('/cart')
+          return
+        }
+
+        // Set trusted server calculations
+        setItems(cartData.items)
+        setSubtotal(cartData.subtotal)
+        setShippingFee(cartData.shippingFee)
+        setTotal(cartData.total)
+        setItemCount(cartData.itemCount)
+      }
+
+      if (addressRes.ok) {
+        const addresses = await addressRes.json()
+        setSavedAddresses(addresses)
+
+        if (addresses.length > 0) {
+          const address = addresses[0]
+          setFormData(prev => ({
+            ...prev,
+            shippingAddress: {
+              id: address.id,
+              name: address.name || '',
+              phone: address.phone || '',
+              street1: address.street1 || '',
+              street2: address.street2 || '',
+              city: address.city || '',
+              state: address.state || '',
+              postalCode: address.postalCode || '',
+              landmark: address.landmark || '',
+              type: address.type || 'HOME'
+            }
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Error loading checkout data:', error)
+      toast.error('Failed to load checkout details')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Helper for Promise.all fetch
+  const fetchAllData = () => {
+    return Promise.all([
+      fetch('/api/cart/summary'),
+      fetch('/api/user/addresses')
+    ])
+  }
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -466,10 +550,6 @@ export default function CheckoutPage() {
   if (!session || items.length === 0) {
     return null
   }
-
-  const subtotal = getTotal()
-  const shippingFee = subtotal > 500 ? 0 : 50
-  const total = subtotal + shippingFee
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -816,7 +896,7 @@ export default function CheckoutPage() {
                 {/* Totals */}
                 <div className="border-t pt-4 space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span>Subtotal ({getTotalItems()} items)</span>
+                    <span>Subtotal ({itemCount} items)</span>
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
 
