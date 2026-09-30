@@ -1,6 +1,6 @@
 import { createSecureOrder, validatePaymentAmount, retryOperation } from "@/lib/razorpay";
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, hasVerifiedContact } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   logSecurityEvent,
@@ -8,11 +8,31 @@ import {
   getClientIP,
   toCurrencyUnit
 } from "@/lib/auditTrail";
+import { isSameOriginRequest } from "@/lib/security";
+import {
+  getPaymentMethodAvailability,
+  getGatewayMethodRestriction,
+  describePaymentMethodUnavailability
+} from "@/lib/payment-methods";
+
+function getOrderGatewaySnapshot(order: Record<string, unknown>) {
+  return {
+    id: typeof order.id === 'string' ? order.id : undefined,
+    amount: typeof order.amount === 'number' ? order.amount : undefined,
+    currency: typeof order.currency === 'string' ? order.currency : undefined,
+    status: typeof order.status === 'string' ? order.status : undefined,
+    receipt: typeof order.receipt === 'string' ? order.receipt : undefined,
+  };
+}
 
 export async function POST(req: NextRequest) {
   const ipAddress = getClientIP(req);
 
   try {
+    if (!isSameOriginRequest(req)) {
+      return NextResponse.json({ error: "Invalid request origin" }, { status: 403 });
+    }
+
     // Authentication check
     const session = await auth();
     if (!session?.user?.id) {
@@ -27,6 +47,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'Unauthorized access' },
         { status: 401 }
+      );
+    }
+
+    if (!(await hasVerifiedContact(session.user.id))) {
+      return NextResponse.json(
+        { error: "Email and required contact verification must be completed before payment." },
+        { status: 403 }
       );
     }
 
@@ -159,8 +186,6 @@ export async function POST(req: NextRequest) {
 
     const amount = internalOrder.totalAmount;
     const amountValidation = validatePaymentAmount(amount);
-    console.log("Total amount = ", amount, amountValidation)
-
     if (!amountValidation.valid) {
       return NextResponse.json(
         { error: "Invalid order amount" },
@@ -223,11 +248,28 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Create secure Razorpay order with retry mechanism
-    // Note: Razorpay's order-creation "method" restriction does not support "wallet",
-    // so omit the restriction in that case and let the checkout widget offer all methods.
-    const orderMethodRestriction =
-      internalOrder.paymentMethod !== 'wallet' ? internalOrder.paymentMethod : undefined;
+    // Create secure Razorpay order with retry mechanism.
+    // Availability is re-asserted here because the order row may be minutes
+    // old and the method could have been disabled in the meantime.
+    const methodAvailability = getPaymentMethodAvailability(
+      internalOrder.paymentMethod,
+      internalOrder.totalAmount
+    );
+
+    if (!methodAvailability.available) {
+      return NextResponse.json(
+        {
+          error: describePaymentMethodUnavailability(methodAvailability.reason),
+          code: 'PAYMENT_METHOD_UNAVAILABLE',
+          reason: methodAvailability.reason
+        },
+        { status: 409 }
+      );
+    }
+
+    // Razorpay rejects some methods as an order-level restriction; the
+    // catalogue decides whether a restriction can be sent at all.
+    const orderMethodRestriction = getGatewayMethodRestriction(internalOrder.paymentMethod);
 
     const razorpayOrder = await retryOperation(async () => {
       return await createSecureOrder({
@@ -253,14 +295,13 @@ export async function POST(req: NextRequest) {
       });
 
       if (existingLog) {
-        console.log('Using existing payment log for order:', razorpayOrder.id);
         // Update existing log with new attempt
         await prisma.paymentLog.update({
           where: { id: existingLog.id },
           data: {
             status: 'PENDING',
             retryCount: { increment: 1 },
-            gatewayResponse: JSON.parse(JSON.stringify(razorpayOrder)),
+            gatewayResponse: getOrderGatewaySnapshot(razorpayOrder),
             updatedAt: new Date()
           }
         });
@@ -274,7 +315,7 @@ export async function POST(req: NextRequest) {
             currency: 'INR',
             status: 'PENDING',
             gateway: 'razorpay',
-            gatewayResponse: JSON.parse(JSON.stringify(razorpayOrder))
+            gatewayResponse: getOrderGatewaySnapshot(razorpayOrder)
           }
         });
       }
@@ -298,16 +339,15 @@ export async function POST(req: NextRequest) {
           });
 
           if (existingLog) {
-            console.log('Using existing payment log after constraint violation');
           } else {
-            console.error('Constraint violation but no existing record found');
+            console.error('Razorpay payment log constraint violation without an existing record');
             throw dbError;
           }
         } else if (target?.includes('razorpayPaymentId')) {
-          console.error('RazorpayPaymentId constraint violation during order creation - this should not happen');
+          console.error('Razorpay payment ID constraint violation during order creation');
           throw dbError;
         } else {
-          console.error('Unknown constraint violation:', target);
+          console.error('Unknown Razorpay payment log constraint violation');
           throw dbError;
         }
       } else {

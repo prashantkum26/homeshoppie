@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { auth, hasVerifiedContact } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calculateOrderTax } from '@/lib/taxEngine'
+import { isSameOriginRequest } from '@/lib/security'
+import {
+  getPaymentMethodAvailability,
+  isPaymentMethodValue,
+  describePaymentMethodUnavailability,
+  getAvailablePaymentMethods,
+  toPublicPaymentMethod
+} from '@/lib/payment-methods'
 
 // GET user orders
 export async function GET() {
@@ -37,12 +45,23 @@ export async function GET() {
 // POST create new order
 export async function POST(request: NextRequest) {
   try {
+    if (!isSameOriginRequest(request)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 })
+    }
+
     const session = await auth()
 
     if (!session?.user?.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
+      )
+    }
+
+    if (!(await hasVerifiedContact(session.user.id))) {
+      return NextResponse.json(
+        { error: 'Email and required contact verification must be completed before checkout.' },
+        { status: 403 }
       )
     }
 
@@ -57,18 +76,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (paymentMethod?.toLowerCase() === 'cod') {
+    // Shape check only. Availability is re-validated below against the
+    // server-computed total, since limits depend on the order value.
+    if (!isPaymentMethodValue(paymentMethod)) {
       return NextResponse.json(
-        { error: 'COD is not allowed.' },
-        { status: 400 }
-      )
-    }
-
-    const allowedPaymentMethods = ['card', 'upi', 'cod'] as const
-
-    if (!paymentMethod || !allowedPaymentMethods.includes(paymentMethod)) {
-      return NextResponse.json(
-        { error: 'Invalid payment method' },
+        { error: 'Invalid payment method', code: 'INVALID_PAYMENT_METHOD' },
         { status: 400 }
       )
     }
@@ -105,7 +117,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify product availability and stock, and get product details for tax calculation
+    type RequestedItem = { productId: string; quantity: number }
+    const normalizedItems = new Map<string, number>()
+
+    for (const item of items as unknown[]) {
+      if (!item || typeof item !== 'object') {
+        return NextResponse.json({ error: 'Invalid order item' }, { status: 400 })
+      }
+
+      const requestedItem = item as Partial<RequestedItem>
+      const productId = requestedItem.productId
+      const quantity = requestedItem.quantity
+      if (
+        typeof productId !== 'string' ||
+        !/^[a-fA-F0-9]{24}$/.test(productId) ||
+        typeof quantity !== 'number' ||
+        !Number.isSafeInteger(quantity) ||
+        quantity < 1 ||
+        quantity > 100
+      ) {
+        return NextResponse.json(
+          { error: 'Each item must have a valid product and quantity between 1 and 100.' },
+          { status: 400 }
+        )
+      }
+
+      normalizedItems.set(
+        productId,
+        (normalizedItems.get(productId) || 0) + quantity
+      )
+    }
+
     const validatedItems: Array<{
       id: string
       name: string
@@ -114,9 +156,9 @@ export async function POST(request: NextRequest) {
       category: string
     }> = []
 
-    for (const item of items) {
+    for (const [productId, quantity] of Array.from(normalizedItems.entries())) {
       const product = await prisma.product.findUnique({
-        where: { id: item.productId },
+        where: { id: productId },
         include: {
           category: true
         }
@@ -124,21 +166,21 @@ export async function POST(request: NextRequest) {
 
       if (!product) {
         return NextResponse.json(
-          { error: `Product not found: ${item?.productId}` },
+          { error: `Product not found: ${productId}` },
           { status: 400 }
         )
       }
 
       if (!product.isActive) {
         return NextResponse.json(
-          { error: `Product is no longer available: ${item.name}` },
+          { error: `Product is no longer available: ${product.name}` },
           { status: 400 }
         )
       }
 
-      if (product.stock < item.quantity) {
+      if (product.stock < quantity) {
         return NextResponse.json(
-          { error: `Insufficient stock for: ${item.name}` },
+          { error: `Insufficient stock for: ${product.name}` },
           { status: 400 }
         )
       }
@@ -147,7 +189,7 @@ export async function POST(request: NextRequest) {
         id: product.id,
         name: product.name,
         price: product.price,
-        quantity: item.quantity,
+        quantity,
         category: product.category.name
       })
     }
@@ -169,9 +211,24 @@ export async function POST(request: NextRequest) {
       userId: session.user.id
     })
 
-    console.log("......................................:::", taxCalculation)
-
     const totalAmount = Number(taxCalculation.finalTotal.toFixed(2))
+
+    // Authoritative availability check against the server-computed total.
+    // The client's list may be stale (method disabled, or cart value grew
+    // past a method limit), so this must run before any order row exists.
+    const methodAvailability = getPaymentMethodAvailability(paymentMethod, totalAmount)
+
+    if (!methodAvailability.available) {
+      return NextResponse.json(
+        {
+          error: describePaymentMethodUnavailability(methodAvailability.reason),
+          code: 'PAYMENT_METHOD_UNAVAILABLE',
+          reason: methodAvailability.reason,
+          availablePaymentMethods: getAvailablePaymentMethods(totalAmount).map(toPublicPaymentMethod)
+        },
+        { status: 409 }
+      )
+    }
 
     // Create the order with address and items
     const order = await prisma.$transaction(async (tx) => {
@@ -217,8 +274,8 @@ export async function POST(request: NextRequest) {
           userId: session.user.id,
           addressId: addressId,
           status: 'PENDING',
-          paymentMethod: paymentMethod || 'card',
-          paymentStatus: paymentMethod === 'cod' ? 'PENDING' : 'PENDING',
+          paymentMethod: paymentMethod,
+          paymentStatus: 'PENDING',
           totalAmount: totalAmount,
           subtotalAmount: subtotal,
           taxAmount: taxCalculation.totalTaxAmount,
@@ -246,16 +303,25 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Update product stock
+      // Reserve inventory atomically. The conditional stock predicate prevents
+      // overselling when concurrent checkouts target the same product.
       for (const item of validatedItems) {
-        await tx.product.update({
-          where: { id: item.id },
+        const reservation = await tx.product.updateMany({
+          where: {
+            id: item.id,
+            isActive: true,
+            stock: { gte: item.quantity },
+          },
           data: {
             stock: {
               decrement: item.quantity
             }
           }
         })
+
+        if (reservation.count !== 1) {
+          throw new Error(`Insufficient stock for product ${item.id}`)
+        }
       }
 
       return newOrder
@@ -274,6 +340,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(order, { status: 201 })
   } catch (error) {
     console.error('Error creating order:', error)
+    if (error instanceof Error && error.message.startsWith('Insufficient stock for product')) {
+      return NextResponse.json(
+        { error: 'One or more products became unavailable. Please review your cart and try again.' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

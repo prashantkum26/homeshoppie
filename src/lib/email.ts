@@ -11,8 +11,6 @@ const emailConfig = {
   },
 }
 
-console.log("Config....::", emailConfig);
-
 // Create transporter
 const transporter = nodemailer.createTransport(emailConfig)
 
@@ -20,10 +18,9 @@ const transporter = nodemailer.createTransport(emailConfig)
 export const verifyEmailConnection = async (): Promise<boolean> => {
   try {
     await transporter.verify()
-    console.log('✅ Email server connection verified')
     return true
-  } catch (error) {
-    console.error('❌ Email server connection failed:', error)
+  } catch {
+    console.error('Email server connection failed')
     return false
   }
 }
@@ -52,10 +49,9 @@ export const sendEmail = async ({
       text,
     })
 
-    console.log('✅ Email sent successfully:', info.messageId)
     return { success: true, messageId: info.messageId }
   } catch (error) {
-    console.error('❌ Failed to send email:', error)
+    console.error('Failed to send email')
     return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
   }
 }

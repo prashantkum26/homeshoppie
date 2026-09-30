@@ -99,26 +99,25 @@ export async function POST(request: NextRequest) {
       }
     })
 
-    // Create verification URL
-    const verificationUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}`
-
-    // TODO: Send email using your preferred email service
-    // For now, we'll just log it (replace with actual email service)
-    console.log(`
-      === EMAIL VERIFICATION ===
-      To: ${user.email}
-      Subject: Verify your HomeShoppie account
-      Link: ${verificationUrl}
-      ===========================
-    `)
-
-    sendEmail({
+    const emailResult = await sendEmail({
       subject:"Verify your HomeShoppie account",
-      to: `${user.email}`,      
+      to: user.email,
+      html: `<p>Verify your HomeShoppie account by clicking <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}">this link</a>.</p>`,
     });
 
-    // Simulate email sending for development
-    // In production, integrate with Resend, SendGrid, AWS SES, etc.
+    if (!emailResult.success) {
+      await prisma.verificationToken.deleteMany({
+        where: {
+          identifier: user.email,
+          token,
+          type: 'EMAIL_VERIFICATION',
+        },
+      })
+      return NextResponse.json({
+        success: false,
+        error: 'Failed to send verification email. Please try again later.',
+      }, { status: 503 })
+    }
 
     // Log the activity
     try {
@@ -132,7 +131,6 @@ export async function POST(request: NextRequest) {
           action: 'CREATE',
           resource: 'email_verification',
           metadata: {
-            email: user.email,
             tokenExpires: expires.toISOString()
           },
           ipAddress: identifier

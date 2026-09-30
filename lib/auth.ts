@@ -67,29 +67,13 @@ export const authOptions = {
 
         // Check if account is active
         if (user.isActive === false) {
-          console.log('Account is inactive:', credentials.email)
           return null
         }
 
         // Check if account is locked
         if (user.isLocked && user.lockUntil && user.lockUntil > new Date()) {
-          console.log('Account is locked until:', user.lockUntil)
           return null
         }
-
-        // Email verification is now required for login
-        // if (!user.emailVerified) {
-        //   console.log('Email not verified for user:', credentials.email)
-        // Allow login but the middleware will redirect to verification
-        // return null // Uncomment this line to block login entirely
-        // }
-
-        // Phone verification check (currently optional)
-        // if (user.phone && !user.phoneVerified) {
-        //   console.log('Phone not verified for user:', credentials.email)
-        //   // Allow login but the middleware will redirect to verification
-        //   // return null // Uncomment this line to block login entirely
-        // }
 
         let isPasswordValid = false
 
@@ -98,14 +82,10 @@ export const authOptions = {
           // New method: explicit salt
           const saltedPassword = (credentials.password as string) + user.passwordSalt
           isPasswordValid = await bcrypt.compare(saltedPassword, user.passwordHash)
-          console.log('Using explicit salt for authentication:', credentials.email)
         } else {
           // Backward compatibility: bcrypt's built-in salt
           isPasswordValid = await bcrypt.compare(credentials.password as string, user.passwordHash)
-          console.log('Using bcrypt built-in salt (legacy):', credentials.email)
         }
-
-        console.log("...................::", isPasswordValid)
 
         if (!isPasswordValid) {
           return null
@@ -160,7 +140,49 @@ export default NextAuth(authOptions)
 import { getServerSession } from 'next-auth/next'
 
 export async function auth() {
-  return await getServerSession(authOptions)
+  const session = await getServerSession(authOptions)
+  if (!session?.user?.id) return null
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      isActive: true,
+      role: true,
+      emailVerified: true,
+      phone: true,
+      phoneVerified: true,
+    },
+  })
+
+  if (
+    !currentUser?.isActive
+  ) {
+    return null
+  }
+
+  session.user.role = currentUser.role
+  session.user.emailVerified = Boolean(currentUser.emailVerified)
+  session.user.phone = currentUser.phone
+  session.user.phoneVerified = Boolean(currentUser.phoneVerified)
+  return session
+}
+
+export async function hasVerifiedContact(userId: string): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      isActive: true,
+      emailVerified: true,
+      phone: true,
+      phoneVerified: true,
+    },
+  })
+
+  return Boolean(
+    user?.isActive &&
+    user.emailVerified &&
+    (!user.phone || user.phoneVerified)
+  )
 }
 
 // Export signIn and signOut from next-auth/react (they're imported differently in v4)

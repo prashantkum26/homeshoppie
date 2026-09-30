@@ -1,5 +1,6 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import { prisma } from "@/lib/prisma";
 
 /**
  * Get Razorpay client lazily.
@@ -438,4 +439,271 @@ export const retryOperation = async <T>(
     : new Error(
         "Operation failed after retries"
       );
+};
+
+const REFUND_PROCESSING_TIMEOUT_MS = 10 * 60 * 1000;
+
+export const getLatePaymentRefundReceipt = (
+  paymentLogId: string
+): string => `late_${paymentLogId}`;
+
+const getRefundFailureMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.message.slice(0, 500);
+  }
+
+  return "Unknown Razorpay refund error";
+};
+
+export type LatePaymentRefundResult = {
+  paymentLogId: string;
+  status: "NOT_REQUIRED" | "PENDING" | "PROCESSING" | "SUCCEEDED" | "FAILED";
+  refundId: string | null;
+  attempted: boolean;
+};
+
+/**
+ * Reconcile and submit one late-payment refund.
+ *
+ * The database claim prevents concurrent workers from issuing the refund.
+ * The deterministic receipt check handles a prior request whose provider
+ * response was lost before local state could be updated.
+ */
+export const processLatePaymentRefund = async (
+  paymentLogId: string
+): Promise<LatePaymentRefundResult> => {
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - REFUND_PROCESSING_TIMEOUT_MS);
+  const claim = await prisma.paymentLog.updateMany({
+    where: {
+      id: paymentLogId,
+      razorpayPaymentId: { not: null },
+      refundAmount: { not: null },
+      OR: [
+        { refundStatus: { in: ["PENDING", "FAILED"] } },
+        {
+          refundStatus: "PROCESSING",
+          refundLastAttemptAt: { lt: staleBefore },
+        },
+      ],
+    },
+    data: {
+      refundStatus: "PROCESSING",
+      refundLastAttemptAt: now,
+      refundFailureReason: null,
+      refundRetryCount: { increment: 1 },
+    },
+  });
+
+  if (claim.count !== 1) {
+    const existing = await prisma.paymentLog.findUnique({
+      where: { id: paymentLogId },
+      select: {
+        refundStatus: true,
+        refundId: true,
+      },
+    });
+
+    return {
+      paymentLogId,
+      status: existing?.refundStatus ?? "NOT_REQUIRED",
+      refundId: existing?.refundId ?? null,
+      attempted: false,
+    };
+  }
+
+  const paymentLog = await prisma.paymentLog.findUnique({
+    where: { id: paymentLogId },
+    select: {
+      id: true,
+      orderId: true,
+      razorpayPaymentId: true,
+      refundId: true,
+      refundReceipt: true,
+      refundAmount: true,
+      refundRetryCount: true,
+    },
+  });
+
+  if (!paymentLog) {
+    throw new Error("Claimed refund payment log no longer exists");
+  }
+
+  if (
+    !paymentLog.razorpayPaymentId ||
+    paymentLog.refundAmount === null ||
+    !Number.isSafeInteger(paymentLog.refundAmount) ||
+    paymentLog.refundAmount <= 0
+  ) {
+    const failureReason = "Claimed refund has invalid gateway payment details";
+    await prisma.paymentLog.updateMany({
+      where: {
+        id: paymentLog.id,
+        refundStatus: "PROCESSING",
+      },
+      data: {
+        refundStatus: "FAILED",
+        refundFailedAt: new Date(),
+        refundFailureReason: failureReason,
+      },
+    });
+
+    return {
+      paymentLogId,
+      status: "FAILED",
+      refundId: paymentLog.refundId,
+      attempted: true,
+    };
+  }
+
+  let receipt =
+    paymentLog.refundReceipt || getLatePaymentRefundReceipt(paymentLog.id);
+
+  try {
+    const razorpay = getRazorpay();
+    let refund = paymentLog.refundId
+      ? await razorpay.payments.fetchRefund(
+          paymentLog.razorpayPaymentId,
+          paymentLog.refundId
+        )
+      : null;
+
+    if (refund?.status === "failed") {
+      receipt =
+        `${getLatePaymentRefundReceipt(paymentLog.id)}_${paymentLog.refundRetryCount}`;
+      await prisma.paymentLog.updateMany({
+        where: {
+          id: paymentLog.id,
+          refundStatus: "PROCESSING",
+        },
+        data: {
+          refundId: null,
+          refundReceipt: receipt,
+        },
+      });
+      refund = null;
+    }
+
+    if (!refund) {
+      const refunds = await razorpay.payments.fetchMultipleRefund(
+        paymentLog.razorpayPaymentId,
+        { count: 100 }
+      );
+      refund =
+        refunds.items.find((item) => item.receipt === receipt) ?? null;
+    }
+
+    if (!refund) {
+      refund = await razorpay.payments.refund(
+        paymentLog.razorpayPaymentId,
+        {
+          amount: paymentLog.refundAmount,
+          speed: "normal",
+          receipt,
+          notes: {
+            reason: "late_payment_for_terminal_order",
+            payment_log_id: paymentLog.id,
+            order_id: paymentLog.orderId,
+          },
+        }
+      );
+    }
+
+    if (
+      refund.payment_id !== paymentLog.razorpayPaymentId ||
+      refund.amount !== paymentLog.refundAmount
+    ) {
+      throw new Error("Razorpay refund does not match the verified payment amount");
+    }
+
+    if (refund.status === "processed") {
+      await prisma.$transaction(async (tx) => {
+        const update = await tx.paymentLog.updateMany({
+          where: {
+            id: paymentLog.id,
+            refundStatus: "PROCESSING",
+          },
+          data: {
+            status: "REFUNDED",
+            refundStatus: "SUCCEEDED",
+            refundId: refund.id,
+            refundReceipt: receipt,
+            refundCompletedAt: new Date(),
+            refundFailedAt: null,
+            refundFailureReason: null,
+            reconciledAt: new Date(),
+          },
+        });
+
+        if (update.count === 1) {
+          await tx.order.updateMany({
+            where: {
+              id: paymentLog.orderId,
+              OR: [
+                { status: "CANCELLED" },
+                { cancelledAt: { not: null } },
+                { paymentStatus: { in: ["FAILED", "CANCELLED"] } },
+              ],
+            },
+            data: {
+              status: "CANCELLED",
+              paymentStatus: "REFUNDED",
+              updatedAt: new Date(),
+            },
+          });
+        }
+      });
+
+      return {
+        paymentLogId,
+        status: "SUCCEEDED",
+        refundId: refund.id,
+        attempted: true,
+      };
+    }
+
+    const failed = refund.status === "failed";
+    await prisma.paymentLog.updateMany({
+      where: {
+        id: paymentLog.id,
+        refundStatus: "PROCESSING",
+      },
+      data: {
+        refundStatus: failed ? "FAILED" : "PENDING",
+        refundId: refund.id,
+        refundReceipt: receipt,
+        refundFailedAt: failed ? new Date() : null,
+        refundFailureReason: failed
+          ? "Razorpay reported that the refund failed"
+          : null,
+      },
+    });
+
+    return {
+      paymentLogId,
+      status: failed ? "FAILED" : "PENDING",
+      refundId: refund.id,
+      attempted: true,
+    };
+  } catch (error: unknown) {
+    await prisma.paymentLog.updateMany({
+      where: {
+        id: paymentLog.id,
+        refundStatus: "PROCESSING",
+      },
+      data: {
+        refundStatus: "FAILED",
+        refundReceipt: receipt,
+        refundFailedAt: new Date(),
+        refundFailureReason: getRefundFailureMessage(error),
+      },
+    });
+
+    return {
+      paymentLogId,
+      status: "FAILED",
+      refundId: paymentLog.refundId,
+      attempted: true,
+    };
+  }
 };

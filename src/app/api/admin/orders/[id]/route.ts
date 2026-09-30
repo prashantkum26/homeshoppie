@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logSecurityEvent, getClientIP } from '@/lib/security'
+import { canCancelOrder, canTransitionOrderStatus } from '@/lib/order-state'
 
 // GET single order (admin only)
 export async function GET(
@@ -151,6 +152,7 @@ export async function PATCH(
       select: { 
         id: true, 
         status: true, 
+        fulfillmentStatus: true,
         orderNumber: true,
         notes: true,
         user: {
@@ -163,6 +165,20 @@ export async function PATCH(
       return NextResponse.json(
         { error: 'Order not found' },
         { status: 404 }
+      )
+    }
+
+    if (status === 'CANCELLED' && !canCancelOrder(currentOrder.status, currentOrder.fulfillmentStatus)) {
+      return NextResponse.json(
+        { error: 'Orders cannot be cancelled after shipping has started', code: 'ORDER_ALREADY_SHIPPED' },
+        { status: 409 }
+      )
+    }
+
+    if (!canTransitionOrderStatus(currentOrder.status, status)) {
+      return NextResponse.json(
+        { error: 'Invalid order status transition', code: 'INVALID_ORDER_TRANSITION' },
+        { status: 409 }
       )
     }
 

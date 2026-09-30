@@ -15,13 +15,47 @@ export const SECURITY_CONFIG = {
   },
   csrf: {
     tokenExpiry: 24 * 60 * 60 * 1000, // 24 hours
-    secret: process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production'
+    secret: process.env.CSRF_SECRET || ''
   },
   security: {
     maxFailedLogins: 5,
     lockoutDuration: 30 * 60 * 1000, // 30 minutes
     passwordMinLength: 8
   }
+}
+
+export function isSameOriginRequest(request: NextRequest): boolean {
+  const origin = request.headers.get('origin')
+  const referer = request.headers.get('referer')
+  let requestOrigin: string | null = origin
+
+  if (!requestOrigin && referer) {
+    try {
+      requestOrigin = new URL(referer).origin
+    } catch {
+      return false
+    }
+  }
+
+  if (!requestOrigin) {
+    return process.env.NODE_ENV !== 'production'
+  }
+
+  const allowedOrigins = new Set(
+    [
+      process.env.NEXTAUTH_URL,
+      process.env.NEXT_PUBLIC_BASE_URL,
+      request.nextUrl.origin,
+    ].filter((value): value is string => Boolean(value)).map((value) => {
+      try {
+        return new URL(value).origin
+      } catch {
+        return ''
+      }
+    }).filter(Boolean)
+  )
+
+  return allowedOrigins.has(requestOrigin)
 }
 
 // Generate CSRF token
@@ -32,13 +66,16 @@ export function generateCSRFToken(): string {
 // Verify CSRF token
 export function verifyCSRFToken(token: string, sessionToken: string): boolean {
   if (!token || !sessionToken) return false
+  if (!SECURITY_CONFIG.csrf.secret) return false
   
   // Create expected token based on session
   const expectedToken = crypto
     .createHmac('sha256', SECURITY_CONFIG.csrf.secret)
     .update(sessionToken)
     .digest('hex')
-  
+
+  if (!/^[a-f0-9]{64}$/i.test(token)) return false
+
   return crypto.timingSafeEqual(
     Buffer.from(token, 'hex'),
     Buffer.from(expectedToken, 'hex')
@@ -47,15 +84,16 @@ export function verifyCSRFToken(token: string, sessionToken: string): boolean {
 
 // Get client IP address
 export function getClientIP(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const realIP = request.headers.get('x-real-ip')
   const cfConnectingIP = request.headers.get('cf-connecting-ip')
-  
-  if (forwarded) {
-    return forwarded.split(',')[0].trim()
-  }
-  
-  return cfConnectingIP || realIP || 'unknown'
+  const realIP = request.headers.get('x-real-ip')
+  const forwarded = request.headers.get('x-forwarded-for')
+
+  // Prefer provider-controlled headers, then the right-most proxy address.
+  // The application must run behind a proxy that overwrites these headers.
+  return cfConnectingIP?.trim() ||
+    realIP?.trim() ||
+    forwarded?.split(',').map(value => value.trim()).filter(Boolean).pop() ||
+    'unknown'
 }
 
 // Rate limiting implementation

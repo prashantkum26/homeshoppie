@@ -68,9 +68,23 @@ DATABASE_URL="mongodb://localhost:27017/homeshoppie"
 NEXTAUTH_SECRET="your-super-secret-key-min-32-chars"
 NEXTAUTH_URL="http://localhost:3000"
 
+# Security
+CSRF_SECRET="a-long-random-production-secret"
+CRON_SECRET="a-long-random-secret-for-expiry-jobs"
+
 # Razorpay Configuration (Get from Razorpay Dashboard)
-NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxx"
+# RAZORPAY_KEY_ID is the server-side key. It is required: without it (or
+# RAZORPAY_KEY_SECRET) every gateway-backed payment method is reported as
+# unavailable and checkout will refuse to create orders.
+RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxx"
 RAZORPAY_KEY_SECRET="your_razorpay_secret"
+# Same key id, exposed to the browser so the checkout widget can open.
+NEXT_PUBLIC_RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxx"
+RAZORPAY_WEBHOOK_SECRET="your_razorpay_webhook_secret"
+
+# Optional: comma-separated payment methods to switch off without a deploy.
+# Valid values: card, upi, netbanking, wallet, emandate, nach
+# PAYMENT_METHODS_DISABLED="upi"
 
 # Base URL
 NEXT_PUBLIC_BASE_URL="http://localhost:3000"
@@ -78,6 +92,104 @@ NEXT_PUBLIC_BASE_URL="http://localhost:3000"
 # Optional: For production deployment
 # VERCEL_URL="your-app.vercel.app"
 ```
+
+`CRON_SECRET` must be configured in production and used by a scheduler to call
+`POST /api/cron/release-expired-orders` and
+`POST /api/cron/retry-refunds` every few minutes. The first releases stock
+reserved by orders whose payment window expired. The second safely reconciles
+pending or failed late-payment refunds before attempting them again. Never
+expose either secret to the browser or use placeholder values in production.
+Generate secrets with a cryptographically secure tool, for example:
+
+```bash
+openssl rand -hex 32
+```
+
+### Payment methods
+
+The list of payment methods has a single source of truth:
+[`src/lib/payment-methods.ts`](src/lib/payment-methods.ts). Every consumer —
+the checkout UI, order creation, and Razorpay order creation — resolves
+availability through that module, so the list can never drift between the
+screen the customer sees and the rules the server enforces.
+
+The catalogue is typed as a total record over the Prisma `PaymentMethod` enum,
+so adding a value to the enum fails `npm run type-check` until it is described.
+The compiler is the synchronisation mechanism.
+
+A method is offered only when **all** of the following hold:
+
+| Condition | Source |
+| --- | --- |
+| `enabled` is true in the catalogue | `src/lib/payment-methods.ts` |
+| Not listed in `PAYMENT_METHODS_DISABLED` | environment |
+| Razorpay credentials are present (gateway methods) | environment |
+| The order total is within the method's min/max | catalogue + server-computed total |
+
+Flow:
+
+1. `GET /api/cart/summary` returns `paymentMethods`, resolved against the
+   server-computed order total. The checkout page renders exactly this list
+   and never filters client-side.
+2. `POST /api/orders` re-validates the submitted method against the total it
+   computes itself. A stale or tampered selection returns `409` with
+   `code: "PAYMENT_METHOD_UNAVAILABLE"`, a machine-readable `reason`, and a
+   refreshed `availablePaymentMethods` list. **No order row is created.**
+   The checkout page consumes this to re-prompt in place.
+3. `POST /api/razorpay/order` re-asserts availability once more, because the
+   order row may be minutes old by the time payment starts.
+
+To change what customers can use:
+
+- **Permanently** — edit `enabled` in the catalogue and ship it (reviewable in
+  a pull request, covered by tests).
+- **Operationally, without a deploy** — set `PAYMENT_METHODS_DISABLED`, e.g.
+  `PAYMENT_METHODS_DISABLED="upi,netbanking"`. It is read on every request, so
+  it takes effect immediately. Unknown entries are ignored rather than throwing,
+  so a typo cannot take checkout down.
+
+Amount limits live in the catalogue too. UPI is capped at ₹1,00,000 to match
+NPCI/bank limits, so a high-value cart never reaches the Razorpay modal with a
+method that is guaranteed to fail.
+
+### Production security checklist
+
+- Serve the application only over HTTPS and keep HSTS enabled.
+- Set `NODE_ENV=production`, `NEXTAUTH_URL`, and `NEXT_PUBLIC_BASE_URL` to the
+  exact public HTTPS origin. Do not include a trailing path or alternate origin.
+- Store `DATABASE_URL`, `NEXTAUTH_SECRET`, `CSRF_SECRET`, `CRON_SECRET`,
+  `RAZORPAY_KEY_SECRET`, and SMTP credentials only in the deployment secret
+  manager. Never commit `.env` files or print these values in logs.
+- Run behind a trusted reverse proxy that overwrites `x-forwarded-for`,
+  `x-real-ip`, and (when applicable) `cf-connecting-ip`; do not expose the
+  application server directly to the internet. These headers are used for
+  rate limiting and audit records.
+- Configure Razorpay webhooks to use the deployed HTTPS webhook URL and verify
+  the webhook secret separately from `RAZORPAY_KEY_SECRET`.
+- Schedule the expiry endpoint with a server-side `POST` request and the
+  `Authorization: Bearer <CRON_SECRET>` header. Do not call it from browser
+  JavaScript.
+- The `/api/test/*` endpoints return `404` in production. Keep test and seed
+  tooling out of production deployments where possible.
+- If a customer closes Razorpay before authorization, the checkout calls
+  `POST /api/orders/:id/cancel`. The server cancels only an unpaid pending
+  order and releases its reserved stock transactionally. Authorized/captured
+  payments are never cancelled based only on browser events; Razorpay
+  webhooks remain authoritative.
+- Razorpay webhook processing uses guarded transactional state transitions.
+  Delayed or duplicate payment events cannot resurrect cancelled/failed orders.
+  A captured payment received after cancellation is refunded for the exact
+  verified gateway amount. Refund IDs, amounts, attempts, timestamps, and
+  failures are persisted; ambiguous provider failures remain retryable and are
+  reconciled by deterministic receipt before another refund request is sent.
+  Only a redacted gateway snapshot is stored; full Razorpay payloads must not be
+  logged or persisted.
+- Customer and admin cancellation is blocked once shipping or fulfillment has
+  started (`SHIPPED`, `DELIVERED`, partial fulfillment, or fulfilled). Use the
+  return/refund workflow for shipped orders instead of changing them to
+  `CANCELLED`.
+- Review admin accounts, rotate secrets after incidents, and monitor failed
+  authentication, payment, webhook, and rate-limit events.
 
 ### 🔑 Getting Razorpay Credentials
 

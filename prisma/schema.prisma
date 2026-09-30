@@ -739,8 +739,8 @@ model PaymentLog {
   method            String?       // "card", "upi", "netbanking", "wallet"
   gateway           String        @default("razorpay")
   
-  // Gateway Response - Should be encrypted
-  gatewayResponse   Json?         // @encrypt
+  // Redacted gateway snapshot; do not store the full provider payload.
+  gatewayResponse   Json?
   
   // Error Handling & Retry
   failureReason     String?
@@ -757,6 +757,18 @@ model PaymentLog {
   reconciledAt      DateTime?
   reconciledBy      String?       @db.ObjectId
   
+  // Late-payment refund reconciliation
+  refundStatus        RefundStatus @default(NOT_REQUIRED)
+  refundId            String?
+  refundReceipt       String?
+  refundAmount        Int?         // Exact gateway amount in paise
+  refundRequestedAt   DateTime?
+  refundLastAttemptAt DateTime?
+  refundCompletedAt   DateTime?
+  refundFailedAt      DateTime?
+  refundFailureReason String?
+  refundRetryCount    Int          @default(0)
+
   // Audit Trail
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -768,6 +780,8 @@ model PaymentLog {
   @@index([status, gateway, createdAt])
   @@index([razorpayOrderId])
   @@index([razorpayPaymentId])
+  @@index([refundStatus, refundLastAttemptAt])
+  @@index([refundId])
   @@index([createdAt])
   
   @@map("payment_logs")
@@ -847,6 +861,14 @@ enum PaymentStatus {
   CANCELLED
   REFUNDED
   PARTIALLY_REFUNDED
+}
+
+enum RefundStatus {
+  NOT_REQUIRED
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
 }
 
 enum ProductStatus {

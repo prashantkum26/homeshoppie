@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
+import { auth, hasVerifiedContact } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { verifyPaymentSignature, retryOperation } from "@/lib/razorpay";
+import { getRazorpay, verifyPaymentSignature, retryOperation } from "@/lib/razorpay";
 import { logSecurityEvent, checkRateLimit, getClientIP } from "@/lib/security";
+import { isSameOriginRequest } from "@/lib/security";
 
 export async function POST(req: NextRequest) {
   const ipAddress = getClientIP(req);
   
   try {
+    if (!isSameOriginRequest(req)) {
+      return NextResponse.json(
+        { success: false, error: "Invalid request origin" },
+        { status: 403 }
+      );
+    }
+
     // Authentication check
     const session = await auth();
     if (!session?.user?.id) {
@@ -22,6 +30,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: 'Unauthorized access' },
         { status: 401 }
+      );
+    }
+
+    if (!(await hasVerifiedContact(session.user.id))) {
+      return NextResponse.json(
+        { success: false, error: "Email and required contact verification must be completed before payment." },
+        { status: 403 }
       );
     }
 
@@ -232,31 +247,21 @@ export async function POST(req: NextRequest) {
         blocked: true
       });
 
-      // Update payment log with failure and clear cart
+      // Record the invalid attempt, but do not cancel the order or clear the
+      // cart because a valid gateway webhook may still arrive.
       await prisma.$transaction(async (tx) => {
-        await tx.paymentLog.update({
-          where: { id: paymentLog.id },
+        await tx.paymentLog.updateMany({
+          where: {
+            id: paymentLog.id,
+            status: { not: 'PAID' },
+            razorpayPaymentId: null,
+          },
           data: {
             status: 'FAILED',
             failureReason: 'Invalid signature verification',
             razorpayPaymentId: razorpay_payment_id,
             signature: razorpay_signature,
             retryCount: { increment: 1 },
-            updatedAt: new Date()
-          }
-        });
-
-        // Clear user's cart on verification failure
-        await tx.cartItem.deleteMany({
-          where: { userId: session.user.id }
-        });
-
-        // Update order status to cancelled
-        await tx.order.update({
-          where: { id: paymentLog.order.id },
-          data: {
-            status: 'CANCELLED',
-            paymentStatus: 'FAILED',
             updatedAt: new Date()
           }
         });
@@ -268,21 +273,52 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const razorpayPayment = await getRazorpay().payments.fetch(razorpay_payment_id);
+    if (
+      razorpayPayment.order_id !== razorpay_order_id ||
+      razorpayPayment.amount !== Math.round(paymentLog.amount) ||
+      razorpayPayment.currency !== paymentLog.currency ||
+      !['authorized', 'captured'].includes(razorpayPayment.status)
+    ) {
+      await logSecurityEvent({
+        userId: session.user.id,
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress,
+        severity: 'HIGH',
+        details: {
+          endpoint: '/api/razorpay/verify',
+          reason: 'Gateway payment details do not match expected payment log',
+          razorpay_order_id,
+          razorpay_payment_id,
+        },
+        blocked: true,
+      });
+
+      return NextResponse.json(
+        { success: false, error: 'Payment details could not be validated' },
+        { status: 400 }
+      );
+    }
+
     // Payment verified successfully - update records with error handling
     try {
       await retryOperation(async () => {
         await prisma.$transaction(async (tx) => {
-          // Use updateMany with where clause to avoid unique constraint issues
+          const paymentStatus = razorpayPayment.status === 'captured'
+            ? 'PAID'
+            : 'AUTHORIZED';
+
           const updateResult = await tx.paymentLog.updateMany({
             where: {
               id: paymentLog.id,
               OR: [
                 { razorpayPaymentId: null },
-                { razorpayPaymentId: razorpay_payment_id } // Allow updating same payment ID
-              ]
+                { razorpayPaymentId: razorpay_payment_id }
+              ],
+              status: { in: ['PENDING', 'AUTHORIZED'] },
             },
             data: {
-              status: 'PAID',
+              status: paymentStatus,
               razorpayPaymentId: razorpay_payment_id,
               signature: razorpay_signature,
               updatedAt: new Date()
@@ -295,21 +331,36 @@ export async function POST(req: NextRequest) {
             return;
           }
 
-          // Update order status (keep the same payment method as originally selected)
-          await tx.order.update({
-            where: { id: paymentLog.order.id },
-            data: {
-              paymentStatus: 'PAID',
-              status: 'CONFIRMED',
-              paymentIntentId: razorpay_payment_id,
-              updatedAt: new Date()
-            }
-          });
+          if (paymentStatus === 'PAID') {
+            await tx.order.updateMany({
+              where: {
+                id: paymentLog.order.id,
+                paymentStatus: { not: 'PAID' },
+              },
+              data: {
+                paymentStatus: 'PAID',
+                status: 'CONFIRMED',
+                paymentIntentId: razorpay_payment_id,
+                updatedAt: new Date()
+              }
+            });
 
-          // Clear user's cart after successful payment
-          await tx.cartItem.deleteMany({
-            where: { userId: session.user.id }
-          });
+            await tx.cartItem.deleteMany({
+              where: { userId: session.user.id }
+            });
+          } else {
+            await tx.order.updateMany({
+              where: {
+                id: paymentLog.order.id,
+                paymentStatus: 'PENDING',
+              },
+              data: {
+                paymentStatus: 'AUTHORIZED',
+                paymentIntentId: razorpay_payment_id,
+                updatedAt: new Date()
+              }
+            });
+          }
         });
       });
     } catch (dbError: any) {

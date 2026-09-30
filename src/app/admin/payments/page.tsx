@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 
 // Types based on Prisma Schema
 type PaymentStatus = 'PENDING' | 'AUTHORIZED' | 'PAID' | 'FAILED' | 'CANCELLED' | 'REFUNDED' | 'PARTIALLY_REFUNDED'
+type RefundStatus = 'NOT_REQUIRED' | 'PENDING' | 'PROCESSING' | 'SUCCEEDED' | 'FAILED'
 
 interface PaymentLog {
   id: string
@@ -22,6 +23,12 @@ interface PaymentLog {
   failureReason: string | null
   failureCode: string | null
   reconciledAt: string | null
+  refundStatus: RefundStatus
+  refundId: string | null
+  refundAmount: number | null
+  refundFailureReason: string | null
+  refundRequestedAt: string | null
+  refundCompletedAt: string | null
   createdAt: string
   order: {
     orderNumber: string
@@ -72,34 +79,32 @@ export default function PaymentsManagementPage() {
     }
   }
 
-  const handleUpdateStatus = async (newStatus: PaymentStatus, isReconciling: boolean = false) => {
+  const handleUpdateStatus = async (
+    newStatus: PaymentStatus | null,
+    isReconciling: boolean = false
+  ) => {
     if (!selectedPayment) return
-    
-    // Safety prompt for refunds
-    if (newStatus === 'REFUNDED' && !confirm('Are you sure you want to mark this as refunded? Make sure you have processed the refund in the Razorpay dashboard first.')) {
-      return
-    }
 
     try {
       setIsUpdating(true)
       const response = await fetch(`/api/admin/payments/${selectedPayment.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          status: newStatus,
-          reconciled: isReconciling
-        })
+        body: JSON.stringify(
+          newStatus ? { status: newStatus, reconciled: isReconciling } : { reconciled: isReconciling }
+        )
       })
 
-      if (!response.ok) throw new Error('Failed to update payment status')
-      
+      const updatedData = await response.json()
+
+      if (!response.ok) {
+        toast.error(updatedData?.error || 'Failed to update payment')
+        return
+      }
+
       toast.success(isReconciling ? 'Payment reconciled successfully' : 'Payment status updated')
       await fetchPayments()
-      
-      // Update selected modal state
-      const updatedData = await response.json()
       setSelectedPayment(updatedData)
-      
     } catch (error) {
       toast.error('Failed to update payment')
     } finally {
@@ -114,7 +119,11 @@ export default function PaymentsManagementPage() {
       p.order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
       p.order.user.email.toLowerCase().includes(searchQuery.toLowerCase())
     
-    const matchesStatus = statusFilter === 'ALL' || p.status === statusFilter
+    const matchesStatus =
+      statusFilter === 'ALL' ||
+      p.status === statusFilter ||
+      (statusFilter === 'REFUND_PENDING' && ['PENDING', 'PROCESSING'].includes(p.refundStatus)) ||
+      (statusFilter === 'REFUND_FAILED' && p.refundStatus === 'FAILED')
 
     return matchesSearch && matchesStatus
   })
@@ -188,6 +197,8 @@ export default function PaymentsManagementPage() {
               <option value="FAILED">Failed Transactions</option>
               <option value="REFUNDED">Refunded</option>
               <option value="PENDING">Pending / Processing</option>
+              <option value="REFUND_PENDING">Refund Required / Processing</option>
+              <option value="REFUND_FAILED">Refund Failed</option>
             </select>
           </div>
         </div>
@@ -329,6 +340,24 @@ export default function PaymentsManagementPage() {
                     </div>
                   </div>
 
+                  {selectedPayment.refundStatus !== 'NOT_REQUIRED' && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-md p-4">
+                      <h3 className="text-sm font-semibold text-orange-900 mb-2">Refund Reconciliation</h3>
+                      <p className="text-sm text-orange-800"><strong>Status:</strong> {selectedPayment.refundStatus}</p>
+                      {selectedPayment.refundAmount !== null && (
+                        <p className="text-sm text-orange-800 mt-1">
+                          <strong>Amount:</strong> {formatCurrency(selectedPayment.refundAmount, selectedPayment.currency)}
+                        </p>
+                      )}
+                      {selectedPayment.refundId && (
+                        <p className="text-sm text-orange-800 mt-1 break-all"><strong>Refund ID:</strong> {selectedPayment.refundId}</p>
+                      )}
+                      {selectedPayment.refundFailureReason && (
+                        <p className="text-sm text-red-700 mt-1"><strong>Failure:</strong> {selectedPayment.refundFailureReason}</p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Error Data (If Failed) */}
                   {selectedPayment.status === 'FAILED' && (
                     <div className="bg-red-50 border border-red-200 rounded-md p-4">
@@ -346,35 +375,18 @@ export default function PaymentsManagementPage() {
                       {!selectedPayment.reconciledAt && (
                         <button 
                           disabled={isUpdating}
-                          onClick={() => handleUpdateStatus(selectedPayment.status, true)}
+                          onClick={() => handleUpdateStatus(null, true)}
                           className="w-full bg-blue-50 text-blue-700 border border-blue-200 py-2 rounded-md text-sm font-medium hover:bg-blue-100 transition disabled:opacity-50"
                         >
                           Mark as Reconciled (Settled in Bank)
                         </button>
                       )}
-
-                      {selectedPayment.status === 'PAID' && (
-                        <button 
-                          disabled={isUpdating}
-                          onClick={() => handleUpdateStatus('REFUNDED')}
-                          className="w-full bg-orange-50 text-orange-700 border border-orange-200 py-2 rounded-md text-sm font-medium hover:bg-orange-100 transition disabled:opacity-50"
-                        >
-                          Mark as Refunded
-                        </button>
-                      )}
-
-                      {selectedPayment.status === 'FAILED' && (
-                        <button 
-                          disabled={isUpdating}
-                          onClick={() => handleUpdateStatus('PAID')}
-                          className="w-full bg-green-50 text-green-700 border border-green-200 py-2 rounded-md text-sm font-medium hover:bg-green-100 transition disabled:opacity-50"
-                        >
-                          Override: Force Mark as Paid
-                        </button>
-                      )}
                     </div>
                     <p className="text-xs text-gray-500 mt-3 italic text-center">
-                      Note: Changing status here does not automatically trigger Razorpay actions. You must process real refunds via your Razorpay Dashboard.
+                      Paid, authorized and refund states are set only by verified Razorpay
+                      webhooks and the refund worker. Issue refunds from the Razorpay
+                      dashboard or let the automatic late-payment refund complete; they
+                      cannot be set by hand here.
                     </p>
                   </div>
 

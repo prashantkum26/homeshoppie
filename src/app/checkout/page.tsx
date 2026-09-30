@@ -22,6 +22,12 @@ interface Address {
   type: string
 }
 
+interface PaymentMethodOption {
+  value: string
+  label: string
+  description: string
+}
+
 interface CheckoutForm {
   shippingAddress: Address
   billingAddress: Address
@@ -41,6 +47,8 @@ export default function CheckoutPage() {
   const [taxAmount, setTaxAmount] = useState(0) // 👈 Added Tax state
   const [total, setTotal] = useState(0)
   const [itemCount, setItemCount] = useState(0)
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([])
+  const [paymentMethodsLoaded, setPaymentMethodsLoaded] = useState(false)
 
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessingError, setIsProcessingError] = useState(false)
@@ -70,7 +78,7 @@ export default function CheckoutPage() {
       type: 'HOME'
     },
     sameAsShipping: true,
-    paymentMethod: 'card',
+    paymentMethod: '',
     notes: ''
   })
 
@@ -188,6 +196,21 @@ export default function CheckoutPage() {
       }
     }
 
+    if (!paymentMethodsLoaded) {
+      toast.error('Still loading payment options. Please wait a moment.')
+      return false
+    }
+
+    if (paymentMethods.length === 0) {
+      toast.error('No payment methods are available right now. Please try again later.')
+      return false
+    }
+
+    if (!paymentMethods.some(m => m.value === formData.paymentMethod)) {
+      toast.error('Please select a payment method')
+      return false
+    }
+
     return true
   }
 
@@ -204,13 +227,25 @@ export default function CheckoutPage() {
         router.push(`/orders/${orderId}?status=payment_failed`)
         
       } else if (errorType === 'cancelled') {
-        setErrorMessage('Payment cancelled. Saving your order...')
-        await new Promise(resolve => setTimeout(resolve, 800))
-        
-        toast('Payment was cancelled. Your order has been saved.')
-        
-        // 🚀 STANDARD UX: Take them out of checkout into the order details view
-        router.push(`/orders/${orderId}?status=payment_cancelled`)
+        setErrorMessage('Cancelling unpaid order...')
+
+        const cancelResponse = await fetch(`/api/orders/${orderId}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+        const cancellation = await cancelResponse.json()
+
+        if (!cancelResponse.ok) {
+          throw new Error(cancellation.error || 'Unable to cancel the order')
+        }
+
+        if (cancellation.cancelled) {
+          toast('Payment cancelled. The order was cancelled and stock was released.')
+          router.push(`/orders/${orderId}?status=payment_cancelled`)
+        } else {
+          toast('Payment is still being processed. We did not cancel the order.')
+          router.push(`/orders/${orderId}?status=payment_processing`)
+        }
       }
     } catch (error) {
       console.error('Error during payment error handling:', error)
@@ -266,6 +301,21 @@ export default function CheckoutPage() {
 
       if (!response.ok) {
         const error = await response.json()
+
+        // The offered list went stale between page load and submit.
+        // Refresh it in place so the customer can pick a valid method
+        // instead of hitting a dead error.
+        if (error.code === 'PAYMENT_METHOD_UNAVAILABLE') {
+          const refreshed = applyPaymentMethods(error.availablePaymentMethods)
+
+          toast.error(
+            refreshed.length > 0
+              ? `${error.error}. Please choose another payment method.`
+              : `${error.error}. Please try again later.`
+          )
+          return
+        }
+
         throw new Error(error.error || 'Failed to create order')
       }
 
@@ -339,7 +389,6 @@ export default function CheckoutPage() {
         },
         modal: {
           ondismiss: function() {
-            toast.error("Payment cancelled. Your order is saved and you can complete payment later.");
             handlePaymentError(internalOrder.id, 'cancelled');
           }          
         },
@@ -381,6 +430,32 @@ export default function CheckoutPage() {
     }
   }
 
+  /**
+   * Replaces the offered methods with the server's list and keeps the
+   * current selection valid. The server is the only authority on what is
+   * offerable, so a selection it no longer returns is dropped.
+   */
+  const applyPaymentMethods = (methods: unknown) => {
+    const list: PaymentMethodOption[] = Array.isArray(methods)
+      ? methods.filter(
+          (m): m is PaymentMethodOption =>
+            !!m && typeof m.value === 'string' && typeof m.label === 'string'
+        )
+      : []
+
+    setPaymentMethods(list)
+    setPaymentMethodsLoaded(true)
+
+    setFormData(prev => {
+      const stillOffered = list.some(m => m.value === prev.paymentMethod)
+      if (stillOffered) return prev
+
+      return { ...prev, paymentMethod: list[0]?.value ?? '' }
+    })
+
+    return list
+  }
+
   const fetchCheckoutData = async () => {
     try {
       setIsLoading(true)
@@ -405,6 +480,7 @@ export default function CheckoutPage() {
         setTaxAmount(Number(cartData.taxAmount) || 0) // 👈 Hydrating tax from summary API
         setTotal(Number(cartData.total) || 0)
         setItemCount(Number(cartData.itemCount) || 0)
+        applyPaymentMethods(cartData.paymentMethods)
       }
 
       if (addressRes.ok) {
@@ -697,31 +773,37 @@ export default function CheckoutPage() {
               {/* Payment Method */}
               <div className="bg-white p-6 rounded-lg shadow-sm">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment Method</h2>
-                <div className="space-y-3">
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="card"
-                      checked={formData.paymentMethod === 'card'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                      className="border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-3">Credit/Debit Card</span>
-                  </label>
-
-                  <label className="flex items-center">
-                    <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="upi"
-                      checked={formData.paymentMethod === 'upi'}
-                      onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                      className="border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-3">UPI Payment</span>
-                  </label>
-                </div>
+                {!paymentMethodsLoaded ? (
+                  <div className="space-y-3" aria-busy="true">
+                    <div className="h-5 bg-gray-100 rounded animate-pulse" />
+                    <div className="h-5 bg-gray-100 rounded animate-pulse" />
+                  </div>
+                ) : paymentMethods.length === 0 ? (
+                  <p className="text-sm text-red-600">
+                    No payment methods are available right now. Please try again later or contact support.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {paymentMethods.map((method) => (
+                      <label key={method.value} className="flex items-start">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={method.value}
+                          checked={formData.paymentMethod === method.value}
+                          onChange={(e) => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
+                          className="mt-1 border-gray-300 text-green-600 shadow-sm focus:border-green-300 focus:ring focus:ring-green-200 focus:ring-opacity-50"
+                        />
+                        <span className="ml-3">
+                          <span className="block text-sm font-medium text-gray-900">{method.label}</span>
+                          {method.description && (
+                            <span className="block text-xs text-gray-500">{method.description}</span>
+                          )}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Order Notes */}
@@ -806,7 +888,7 @@ export default function CheckoutPage() {
                 <div className="mt-6 space-y-3">
                   <button
                     type="submit"
-                    disabled={isLoading}
+                    disabled={isLoading || !paymentMethodsLoaded || paymentMethods.length === 0}
                     className="w-full bg-green-600 border border-transparent rounded-md shadow-sm py-3 px-4 text-base font-medium text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isLoading ? 'Processing...' : 'Continue to Payment'}

@@ -65,7 +65,6 @@ export async function POST(request: NextRequest) {
     // For security, always return success even if user doesn't exist
     // This prevents email enumeration attacks
     if (!user) {
-      console.log(`Password reset attempted for non-existent email: ${email}`)
       return NextResponse.json({
         success: true,
         message: 'If an account with this email exists, you will receive a password reset link shortly.'
@@ -74,7 +73,6 @@ export async function POST(request: NextRequest) {
 
     // Check if user account is active
     if (!user.isActive) {
-      console.log(`Password reset attempted for inactive account: ${email}`)
       return NextResponse.json({
         success: true,
         message: 'If an account with this email exists, you will receive a password reset link shortly.'
@@ -83,7 +81,6 @@ export async function POST(request: NextRequest) {
 
     // Check if user account is locked
     if (user.isLocked && user.lockUntil && user.lockUntil > new Date()) {
-      console.log(`Password reset attempted for locked account: ${email}`)
       return NextResponse.json(
         { 
           success: false, 
@@ -128,7 +125,7 @@ export async function POST(request: NextRequest) {
       const emailResult = await sendPasswordResetEmail(user.email, resetToken, user.name || undefined)
       
       if (!emailResult.success) {
-        console.error('Failed to send password reset email:', emailResult.error)
+        console.error('Failed to send password reset email')
         
         // Clean up the token since email failed
         await prisma.verificationToken.deleteMany({
@@ -147,7 +144,6 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log(`Password reset email sent successfully to: ${user.email}`)
 
       // Log the security event
       await prisma.securityLog.create({
@@ -172,7 +168,7 @@ export async function POST(request: NextRequest) {
       })
 
     } catch (emailError) {
-      console.error('Error sending password reset email:', emailError)
+      console.error('Error sending password reset email')
       
       // Clean up the token since email failed
       await prisma.verificationToken.deleteMany({

@@ -26,7 +26,7 @@ const customJestConfig = {
     '<rootDir>/**/*.(test|spec).{ts,tsx}',
   ],
   moduleNameMapper: {
-    '^@/lib/(.*)$': '<rootDir>/lib/$1',
+    '^@/lib/(.*)$': ['<rootDir>/lib/$1', '<rootDir>/src/lib/$1'],
     '^@/(.*)$': '<rootDir>/src/$1',
   },
   transform: {
@@ -49,7 +49,7 @@ const customJestConfig = {
       testMatch: ['<rootDir>/src/app/api/**/__tests__/**/*.{ts,tsx}'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
       moduleNameMapper: {
-        '^@/lib/(.*)$': '<rootDir>/lib/$1',
+        '^@/lib/(.*)$': ['<rootDir>/lib/$1', '<rootDir>/src/lib/$1'],
         '^@/(.*)$': '<rootDir>/src/$1',
       },
       transform: {
@@ -74,7 +74,7 @@ const customJestConfig = {
       testPathIgnorePatterns: ['<rootDir>/src/app/api/'],
       setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
       moduleNameMapper: {
-        '^@/lib/(.*)$': '<rootDir>/lib/$1',
+        '^@/lib/(.*)$': ['<rootDir>/lib/$1', '<rootDir>/src/lib/$1'],
         '^@/(.*)$': '<rootDir>/src/$1',
       },
       transform: {

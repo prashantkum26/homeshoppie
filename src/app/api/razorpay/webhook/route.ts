@@ -1,7 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { verifyWebhookSignature } from "@/lib/razorpay";
+import {
+  getLatePaymentRefundReceipt,
+  processLatePaymentRefund,
+  verifyWebhookSignature,
+} from "@/lib/razorpay";
 import { logSecurityEvent, getClientIP } from "@/lib/security";
+
+function getPaymentGatewaySnapshot(paymentEntity: Record<string, unknown>) {
+  return {
+    id: typeof paymentEntity.id === 'string' ? paymentEntity.id : undefined,
+    order_id: typeof paymentEntity.order_id === 'string' ? paymentEntity.order_id : undefined,
+    amount: typeof paymentEntity.amount === 'number' ? paymentEntity.amount : undefined,
+    currency: typeof paymentEntity.currency === 'string' ? paymentEntity.currency : undefined,
+    status: typeof paymentEntity.status === 'string' ? paymentEntity.status : undefined,
+    method: typeof paymentEntity.method === 'string' ? paymentEntity.method : undefined,
+    error_code: typeof paymentEntity.error_code === 'string' ? paymentEntity.error_code : undefined,
+    error_description: typeof paymentEntity.error_description === 'string'
+      ? paymentEntity.error_description
+      : undefined,
+  };
+}
+
+function getOrderGatewaySnapshot(orderEntity: Record<string, unknown>) {
+  return {
+    id: typeof orderEntity.id === 'string' ? orderEntity.id : undefined,
+    amount_paid: typeof orderEntity.amount_paid === 'number' ? orderEntity.amount_paid : undefined,
+    currency: typeof orderEntity.currency === 'string' ? orderEntity.currency : undefined,
+    status: typeof orderEntity.status === 'string' ? orderEntity.status : undefined,
+  };
+}
 
 export async function POST(req: NextRequest) {
   const ipAddress = getClientIP(req);
@@ -67,13 +95,14 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log("event....::", event)
-
     // Handle different webhook events
     switch (eventType) {
       case 'payment.authorized':
+        await handlePaymentSuccess(payload.payment.entity, false);
+        break;
+
       case 'payment.captured':
-        await handlePaymentSuccess(payload.payment.entity);
+        await handlePaymentSuccess(payload.payment.entity, true);
         break;
         
       case 'payment.failed':
@@ -102,7 +131,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ status: 'success' });
 
   } catch (error: any) {
-    console.error('Webhook processing failed:', error);
+    console.error('Webhook processing failed:', error instanceof Error ? error.message : 'unknown error');
     
     await logSecurityEvent({
       action: 'API_ACCESS',
@@ -110,7 +139,6 @@ export async function POST(req: NextRequest) {
       severity: 'HIGH',
       details: {
         endpoint: '/api/razorpay/webhook',
-        error: error.message,
         action: 'webhook_processing_failed'
       }
     });
@@ -122,25 +150,66 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function handlePaymentSuccess(paymentEntity: any) {
+async function handlePaymentSuccess(paymentEntity: any, captured: boolean) {
   try {
-    console.log("paymentEntity....::", paymentEntity)
-    const { id: paymentId, order_id: razorpayOrderId, amount, method } = paymentEntity;
+    const {
+      id: paymentId,
+      order_id: razorpayOrderId,
+      amount,
+      currency,
+      method,
+    } = paymentEntity;
 
     // Find payment log
     const paymentLog = await prisma.paymentLog.findFirst({
       where: { razorpayOrderId },
-      include: { order: true }
+      include: { order: { include: { orderItems: true } } }
     });
 
     if (!paymentLog) {
-      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      console.error('Payment log not found for Razorpay order');
+      return;
+    }
+
+    if (
+      paymentLog.amount !== amount ||
+      paymentLog.currency !== currency ||
+      !razorpayOrderId ||
+      typeof paymentId !== 'string' ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0
+    ) {
+      await logSecurityEvent({
+        action: 'SUSPICIOUS_ACTIVITY',
+        ipAddress: 'webhook',
+        severity: 'CRITICAL',
+        details: {
+          endpoint: '/api/razorpay/webhook',
+          action: 'payment_amount_or_currency_mismatch',
+          payment_id: paymentId,
+          razorpay_order_id: razorpayOrderId,
+          order_id: paymentLog.orderId,
+        },
+        blocked: true,
+      });
+      return;
+    }
+
+    if (
+      paymentLog.razorpayPaymentId === paymentId &&
+      captured &&
+      paymentLog.refundStatus !== 'NOT_REQUIRED' &&
+      paymentLog.refundStatus !== 'SUCCEEDED'
+    ) {
+      await processLatePaymentRefund(paymentLog.id);
       return;
     }
 
     // Check if this payment has already been processed (idempotency check)
-    if (paymentLog.razorpayPaymentId === paymentId && paymentLog.status === 'PAID') {
-      console.log('Payment already processed:', paymentId);
+    if (
+      paymentLog.razorpayPaymentId === paymentId &&
+      ['PAID', 'REFUNDED'].includes(paymentLog.status)
+    ) {
       return;
     }
 
@@ -154,7 +223,7 @@ async function handlePaymentSuccess(paymentEntity: any) {
       });
 
       if (existingPaymentWithId) {
-        console.warn('RazorpayPaymentId already exists in another record:', paymentId);
+        console.warn('Razorpay payment ID already exists in another record');
         await logSecurityEvent({
           action: 'API_ACCESS',
           ipAddress: 'webhook',
@@ -194,48 +263,179 @@ async function handlePaymentSuccess(paymentEntity: any) {
       }
     }
 
-    // Update payment log and order status with error handling
+    // Transition active orders normally. A captured payment that loses a race
+    // with cancellation is recorded for refund without changing order status.
     try {
-      await prisma.$transaction(async (tx) => {
-        // Use updateMany with where clause to avoid unique constraint issues
-        const updateResult = await tx.paymentLog.updateMany({
+      const transition = await prisma.$transaction(async (tx) => {
+        const orderUpdate = await tx.order.updateMany({
+          where: captured
+            ? {
+                id: paymentLog.orderId,
+                status: 'PENDING',
+                paymentStatus: { in: ['PENDING', 'AUTHORIZED'] },
+              }
+            : {
+                id: paymentLog.orderId,
+                status: 'PENDING',
+                paymentStatus: 'PENDING',
+              },
+          data: captured
+            ? {
+                paymentStatus: 'PAID',
+                paymentMethod: internalMethod,
+                status: 'CONFIRMED',
+                paymentIntentId: paymentId,
+                updatedAt: new Date(),
+              }
+            : {
+                paymentStatus: 'AUTHORIZED',
+                paymentMethod: internalMethod,
+                paymentIntentId: paymentId,
+                updatedAt: new Date(),
+              },
+        });
+
+        if (orderUpdate.count === 1) {
+          const paymentUpdate = await tx.paymentLog.updateMany({
+            where: {
+              id: paymentLog.id,
+              status: { in: ['PENDING', 'AUTHORIZED'] },
+              OR: [
+                { razorpayPaymentId: null },
+                { razorpayPaymentId: paymentId },
+              ],
+            },
+            data: {
+              status: captured ? 'PAID' : 'AUTHORIZED',
+              razorpayPaymentId: paymentId,
+              method,
+              gatewayResponse: getPaymentGatewaySnapshot(paymentEntity),
+              updatedAt: new Date(),
+            },
+          });
+
+          if (paymentUpdate.count !== 1) {
+            throw new Error('Payment log transition conflicted with order transition');
+          }
+
+          return {
+            orderUpdated: true,
+            paymentUpdated: true,
+            refundPaymentLogId: null,
+          };
+        }
+
+        const currentOrder = await tx.order.findUnique({
+          where: { id: paymentLog.orderId },
+          select: {
+            status: true,
+            paymentStatus: true,
+            cancelledAt: true,
+          },
+        });
+        const isTerminalOrder =
+          currentOrder?.status === 'CANCELLED' ||
+          currentOrder?.cancelledAt != null ||
+          currentOrder?.paymentStatus === 'FAILED' ||
+          currentOrder?.paymentStatus === 'CANCELLED';
+
+        if (!captured || !isTerminalOrder) {
+          return {
+            orderUpdated: false,
+            paymentUpdated: false,
+            refundPaymentLogId: null,
+          };
+        }
+
+        const refundRequestedAt = new Date();
+        if (currentOrder?.cancelledAt) {
+          await tx.order.updateMany({
+            where: {
+              id: paymentLog.orderId,
+              cancelledAt: { not: null },
+            },
+            data: {
+              status: 'CANCELLED',
+              updatedAt: refundRequestedAt,
+            },
+          });
+        }
+
+        const latePaymentUpdate = await tx.paymentLog.updateMany({
           where: {
             id: paymentLog.id,
+            refundStatus: 'NOT_REQUIRED',
+            status: {
+              in: ['PENDING', 'AUTHORIZED', 'PAID', 'FAILED', 'CANCELLED'],
+            },
             OR: [
               { razorpayPaymentId: null },
-              { razorpayPaymentId: paymentId } // Allow updating same payment ID
-            ]
+              { razorpayPaymentId: paymentId },
+            ],
           },
           data: {
             status: 'PAID',
             razorpayPaymentId: paymentId,
-            method: method,
-            gatewayResponse: paymentEntity,
-            updatedAt: new Date()
-          }
+            method,
+            gatewayResponse: getPaymentGatewaySnapshot(paymentEntity),
+            refundStatus: 'PENDING',
+            refundAmount: amount,
+            refundReceipt: getLatePaymentRefundReceipt(paymentLog.id),
+            refundRequestedAt,
+            refundFailureReason: null,
+            updatedAt: refundRequestedAt,
+          },
         });
 
-        // If no rows were updated, payment ID might already be set by another process
-        if (updateResult.count === 0) {
-          console.warn('Payment log not updated - possibly already processed by another request:', paymentId);
-          return;
-        }
-
-        await tx.order.update({
-          where: { id: paymentLog.orderId },
-          data: {
-            paymentStatus: 'PAID',
-            paymentMethod: internalMethod,
-            status: 'CONFIRMED',
-            paymentIntentId: paymentId,
-            updatedAt: new Date()
-          }
-        });
+        return {
+          orderUpdated: false,
+          paymentUpdated: latePaymentUpdate.count === 1,
+          refundPaymentLogId:
+            latePaymentUpdate.count === 1 ? paymentLog.id : null,
+        };
       });
+
+      if (transition.refundPaymentLogId) {
+        const refund = await processLatePaymentRefund(
+          transition.refundPaymentLogId
+        );
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: refund.status === 'FAILED' ? 'HIGH' : 'MEDIUM',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'late_payment_refund_reconciled',
+            payment_id: paymentId,
+            order_id: paymentLog.orderId,
+            refund_id: refund.refundId,
+            refund_status: refund.status,
+            refund_amount: amount,
+          },
+        });
+        return;
+      }
+
+      if (!transition.paymentUpdated) {
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: 'HIGH',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'payment_received_for_non_pending_order',
+            payment_id: paymentId,
+            order_id: paymentLog.orderId,
+            captured,
+            reconciliation_required: captured,
+          },
+        });
+        return;
+      }
     } catch (dbError: any) {
       // Handle unique constraint violation specifically
       if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayPaymentId')) {
-        console.warn('Duplicate razorpayPaymentId constraint violation handled:', paymentId);
+        console.warn('Duplicate Razorpay payment ID constraint violation handled');
         
         await logSecurityEvent({
           action: 'API_ACCESS',
@@ -268,7 +468,7 @@ async function handlePaymentSuccess(paymentEntity: any) {
     });
 
   } catch (error: any) {
-    console.error('Failed to process payment success:', error);
+    console.error('Failed to process payment success:', error instanceof Error ? error.message : 'unknown error');
     throw error;
   }
 }
@@ -280,17 +480,16 @@ async function handlePaymentFailure(paymentEntity: any) {
     // Find payment log
     const paymentLog = await prisma.paymentLog.findFirst({
       where: { razorpayOrderId },
-      include: { order: true }
+      include: { order: { include: { orderItems: true } } }
     });
 
     if (!paymentLog) {
-      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      console.error('Payment log not found for Razorpay order');
       return;
     }
 
     // Check if this payment failure has already been processed (idempotency check)
     if (paymentLog.razorpayPaymentId === paymentId && paymentLog.status === 'FAILED') {
-      console.log('Payment failure already processed:', paymentId);
       return;
     }
 
@@ -303,7 +502,7 @@ async function handlePaymentFailure(paymentEntity: any) {
     });
 
     if (existingPaymentWithId) {
-      console.warn('RazorpayPaymentId already exists in another record:', paymentId);
+      console.warn('Razorpay payment ID already exists in another record');
       await logSecurityEvent({
         action: 'API_ACCESS',
         ipAddress: 'webhook',
@@ -319,41 +518,66 @@ async function handlePaymentFailure(paymentEntity: any) {
       return;
     }
 
-    // Update payment log with failure details and clear user's cart
+    // Update payment log with failure details and release stock only when this
+    // was the final active payment attempt.
     try {
       await prisma.$transaction(async (tx) => {
         // Update payment log with failure
-        await tx.paymentLog.update({
-          where: { id: paymentLog.id },
+        const updateResult = await tx.paymentLog.updateMany({
+          where: {
+            id: paymentLog.id,
+            status: { not: 'PAID' },
+          },
           data: {
             status: 'FAILED',
             razorpayPaymentId: paymentId,
             failureReason: `${error_code}: ${error_description}`,
-            gatewayResponse: paymentEntity,
+            gatewayResponse: getPaymentGatewaySnapshot(paymentEntity),
             retryCount: { increment: 1 },
             updatedAt: new Date()
           }
         });
 
-        // Clear user's cart on payment failure for better UX
-        await tx.cartItem.deleteMany({
-          where: { userId: paymentLog.order.userId }
+        if (updateResult.count === 0) {
+          return;
+        }
+
+        const activeAttempts = await tx.paymentLog.count({
+          where: {
+            orderId: paymentLog.orderId,
+            id: { not: paymentLog.id },
+            status: { in: ['PENDING', 'AUTHORIZED'] },
+          },
         });
 
-        // Update order status to failed
-        await tx.order.update({
-          where: { id: paymentLog.orderId },
-          data: {
-            status: 'CANCELLED',
-            paymentStatus: 'FAILED',
-            updatedAt: new Date()
+        if (activeAttempts === 0) {
+          const orderUpdate = await tx.order.updateMany({
+            where: {
+              id: paymentLog.orderId,
+              paymentStatus: { not: 'PAID' },
+              status: 'PENDING',
+            },
+            data: {
+              status: 'CANCELLED',
+              paymentStatus: 'FAILED',
+              updatedAt: new Date()
+            }
+          });
+
+          if (orderUpdate.count === 1) {
+            for (const item of paymentLog.order.orderItems) {
+              await tx.product.updateMany({
+                where: { id: item.productId },
+                data: { stock: { increment: item.quantity } },
+              });
+            }
           }
-        });
+        }
       });
     } catch (dbError: any) {
       // Handle unique constraint violation specifically
       if (dbError.code === 'P2002' && dbError.meta?.target?.includes('razorpayPaymentId')) {
-        console.warn('Duplicate razorpayPaymentId constraint violation handled for failure:', paymentId);
+        console.warn('Duplicate Razorpay payment ID constraint violation handled for failure');
         
         await logSecurityEvent({
           action: 'API_ACCESS',
@@ -387,7 +611,7 @@ async function handlePaymentFailure(paymentEntity: any) {
     });
 
   } catch (error: any) {
-    console.error('Failed to process payment failure:', error);
+    console.error('Failed to process payment failure:', error instanceof Error ? error.message : 'unknown error');
     throw error;
   }
 }
@@ -396,44 +620,108 @@ async function handleOrderPaid(orderEntity: any) {
   try {
     const { id: razorpayOrderId, amount_paid, status } = orderEntity;
 
-    console.log("orderEntity....::", orderEntity)
-    console.log("amount_paid....::", amount_paid)
-
     // Find payment log
     const paymentLog = await prisma.paymentLog.findFirst({
       where: { razorpayOrderId },
       include: { order: true }
     });
 
-    console.log("paymentLog....::", paymentLog)
-
     if (!paymentLog) {
-      console.error('Payment log not found for Razorpay order:', razorpayOrderId);
+      console.error('Payment log not found for Razorpay order');
       return;
     }
 
     // Double-check that the order is fully paid
-    if (status === 'paid' && amount_paid == paymentLog.amount) {
-      // console.log("Enter the condition....::")
-      await prisma.$transaction(async (tx) => {
-        await tx.paymentLog.update({
-          where: { id: paymentLog.id },
-          data: {
-            status: 'PAID',
-            gatewayResponse: orderEntity,
-            updatedAt: new Date()
-          }
-        });
-
-        await tx.order.update({
-          where: { id: paymentLog.orderId },
+    if (
+      status === 'paid' &&
+      amount_paid === paymentLog.amount &&
+      orderEntity.currency === paymentLog.currency
+    ) {
+      const transition = await prisma.$transaction(async (tx) => {
+        const orderUpdate = await tx.order.updateMany({
+          where: {
+            id: paymentLog.orderId,
+            status: 'PENDING',
+            paymentStatus: { in: ['PENDING', 'AUTHORIZED'] },
+          },
           data: {
             paymentStatus: 'PAID',
             status: 'CONFIRMED',
-            updatedAt: new Date()
-          }
+            updatedAt: new Date(),
+          },
         });
+
+        const paymentUpdate = await tx.paymentLog.updateMany({
+          where: {
+            id: paymentLog.id,
+            status: { in: ['PENDING', 'AUTHORIZED'] },
+          },
+          data: {
+            status: 'PAID',
+            gatewayResponse: getOrderGatewaySnapshot(orderEntity),
+            updatedAt: new Date(),
+          },
+        });
+
+        return {
+          orderUpdated: orderUpdate.count === 1,
+          paymentUpdated: paymentUpdate.count === 1,
+        };
       });
+
+      if (!transition.orderUpdated) {
+        if (paymentLog.order.status === 'CANCELLED') {
+          const latePayment = await prisma.paymentLog.updateMany({
+            where: {
+              id: paymentLog.id,
+              refundStatus: 'NOT_REQUIRED',
+              status: { in: ['PENDING', 'AUTHORIZED', 'PAID', 'FAILED', 'CANCELLED'] },
+            },
+            data: {
+              status: 'PAID',
+              refundStatus: 'PENDING',
+              refundAmount: amount_paid,
+              refundReceipt: getLatePaymentRefundReceipt(paymentLog.id),
+              refundRequestedAt: new Date(),
+              refundFailureReason: null,
+              updatedAt: new Date(),
+            },
+          });
+
+          if (latePayment.count === 1) {
+            const refund = await processLatePaymentRefund(paymentLog.id);
+            await logSecurityEvent({
+              action: 'API_ACCESS',
+              ipAddress: 'webhook',
+              severity: refund.status === 'FAILED' ? 'HIGH' : 'MEDIUM',
+              details: {
+                endpoint: '/api/razorpay/webhook',
+                action: 'late_order_paid_refund_reconciled',
+                order_id: paymentLog.orderId,
+                refund_status: refund.status,
+                refund_amount: amount_paid,
+              },
+            });
+          }
+          return;
+        }
+
+        if (!transition.paymentUpdated) return;
+
+        await logSecurityEvent({
+          action: 'API_ACCESS',
+          ipAddress: 'webhook',
+          severity: 'HIGH',
+          details: {
+            endpoint: '/api/razorpay/webhook',
+            action: 'order_paid_for_non_pending_order',
+            razorpay_order_id: razorpayOrderId,
+            order_id: paymentLog.orderId,
+            reconciliation_required: true,
+          },
+        });
+        return;
+      }
 
       // Log order paid processing
       await logSecurityEvent({
@@ -451,8 +739,7 @@ async function handleOrderPaid(orderEntity: any) {
     }
 
   } catch (error: any) {
-    console.log(error, "....::")
-    console.error('Failed to process order paid:', error);
+    console.error('Failed to process order paid:', error instanceof Error ? error.message : 'unknown error');
     throw error;
   }
 }

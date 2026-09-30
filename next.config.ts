@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   /* config options here */
   reactStrictMode: false, // Disable to prevent duplicate API calls in development
   reactCompiler: true,
+  poweredByHeader: false,
   
   // Image configuration
   images: {
@@ -108,10 +109,6 @@ const nextConfig: NextConfig = {
   
   // Additional experimental features
   experimental: {
-    // Suppress hydration warnings in development
-    ...(process.env.NODE_ENV === 'development' && {
-      suppressHydrationWarning: true,
-    }),
     // Optimize package imports
     optimizePackageImports: ['@prisma/client', 'razorpay', 'zustand'],
   },

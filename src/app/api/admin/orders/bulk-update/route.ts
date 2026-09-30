@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logSecurityEvent, getClientIP } from '@/lib/security'
+import { canCancelOrder, canTransitionOrderStatus } from '@/lib/order-state'
 
 // PATCH bulk update order statuses (admin only)
 export async function PATCH(request: NextRequest) {
@@ -59,6 +60,7 @@ export async function PATCH(request: NextRequest) {
         id: true, 
         orderNumber: true, 
         status: true,
+        fulfillmentStatus: true,
         user: {
           select: { email: true, name: true }
         }
@@ -69,6 +71,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json(
         { error: 'No orders found with provided IDs' },
         { status: 404 }
+      )
+    }
+
+    if (status === 'CANCELLED' && existingOrders.some(order => !canCancelOrder(order.status, order.fulfillmentStatus))) {
+      return NextResponse.json(
+        { error: 'One or more orders have already entered shipping/fulfillment and cannot be cancelled', code: 'ORDER_ALREADY_SHIPPED' },
+        { status: 409 }
+      )
+    }
+
+    if (existingOrders.some(order => !canTransitionOrderStatus(order.status, status))) {
+      return NextResponse.json(
+        { error: 'One or more orders have an invalid status transition', code: 'INVALID_ORDER_TRANSITION' },
+        { status: 409 }
       )
     }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { calculateOrderTax } from '@/lib/taxEngine'
+import { getAvailablePaymentMethods, toPublicPaymentMethod } from '@/lib/payment-methods'
 
 export async function GET(_request: NextRequest) {
   try {
@@ -42,7 +43,8 @@ export async function GET(_request: NextRequest) {
         shippingFee: 0, 
         taxAmount: 0, 
         total: 0, 
-        itemCount: 0 
+        itemCount: 0,
+        paymentMethods: []
       }, { status: 200 })
     }
 
@@ -110,7 +112,10 @@ export async function GET(_request: NextRequest) {
       taxAmount: taxCalculation.totalTaxAmount,
       taxBreakdown: taxCalculation.taxBreakdown,
       total: taxCalculation.finalTotal,
-      itemCount: verifiedItems.reduce((acc, i) => acc + i.quantity, 0)
+      itemCount: verifiedItems.reduce((acc, i) => acc + i.quantity, 0),
+      // Resolved against the server-computed total so the checkout UI can
+      // never offer a method that order creation would reject.
+      paymentMethods: getAvailablePaymentMethods(taxCalculation.finalTotal).map(toPublicPaymentMethod)
     })
 
   } catch (error: any) {

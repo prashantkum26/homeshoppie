@@ -5,6 +5,10 @@ import { prisma } from '../../../../../lib/prisma'
 // Test endpoint to validate image-product linking
 export async function GET(_request: NextRequest) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     const session = await auth()
 
     if (!session?.user?.id || session.user.role !== 'ADMIN') {
@@ -71,6 +75,10 @@ export async function GET(_request: NextRequest) {
 // Test endpoint to create a sample product for testing
 export async function POST(_request: NextRequest) {
   try {
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+
     const session = await auth()
 
     if (!session?.user?.id || session.user.role !== 'ADMIN') {
