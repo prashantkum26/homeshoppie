@@ -11,7 +11,6 @@ export async function GET() {
 
     // Fetch categories that are not soft-deleted
     const categories = await prisma.category.findMany({
-      where: { deletedAt: null },
       include: {
         parent: {
           select: { name: true }

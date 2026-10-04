@@ -53,23 +53,17 @@ const stats: Stat[] = [
 
 const team: TeamMember[] = [
   {
-    name: 'Sarah Johnson',
+    name: 'Prashant Kumar',
     role: 'Founder & CEO',
-    image: 'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=687&q=80',
-    bio: 'Sarah founded HomeShoppie with a vision to make quality home products accessible to everyone.',
+    image: '/images/users/boy-avatar-img.png',
+    bio: 'Prashant founded HomeShoppie with a vision to make quality home products accessible to everyone.',
   },
   {
-    name: 'Michael Chen',
+    name: 'Chandni Kumari',
     role: 'Head of Product',
-    image: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80',
-    bio: 'Michael leads our product curation team, ensuring we offer the best selection for your home.',
-  },
-  {
-    name: 'Emily Rodriguez',
-    role: 'Customer Success Manager',
-    image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1470&q=80',
-    bio: 'Emily ensures every customer has an exceptional experience with our products and services.',
-  },
+    image: '/images/users/girl-avatar-img.png',
+    bio: 'Chandni leads our product curation team, ensuring we offer the best selection for your home.',
+  }
 ]
 
 export default function AboutPage() {
@@ -84,7 +78,7 @@ export default function AboutPage() {
             </h1> */}
             <h1 className="text-4xl font-bold text-gray-900 mb-4">About HomeShoppie</h1>
             <p className="mt-6 text-lg leading-8 text-gray-600">
-              We're passionate about helping you create the perfect home. From furniture to decor, 
+              We're passionate about helping you create the perfect home. From furniture to decor,
               we curate the finest products to transform your living spaces into something extraordinary.
             </p>
           </div>
@@ -100,8 +94,8 @@ export default function AboutPage() {
             Making Beautiful Homes Accessible
           </p>
           <p className="mt-6 text-lg leading-8 text-gray-600">
-            At HomeShoppie, we believe that everyone deserves a beautiful, comfortable home. 
-            Our mission is to provide high-quality home products at affordable prices, 
+            At HomeShoppie, we believe that everyone deserves a beautiful, comfortable home.
+            Our mission is to provide high-quality home products at affordable prices,
             backed by exceptional customer service.
           </p>
         </div>

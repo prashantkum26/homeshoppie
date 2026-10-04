@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { 
   PhoneIcon, 
   EnvelopeIcon, 
   MapPinIcon, 
   ClockIcon,
   ChatBubbleLeftRightIcon,
-  CheckCircleIcon
+  CheckCircleIcon,
+  ArrowLeftIcon
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
 import Input from '@/components/ui/Input'
@@ -44,7 +46,6 @@ export default function ContactPage() {
       [name]: value
     }))
     
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }))
     }
@@ -114,7 +115,6 @@ export default function ContactPage() {
       setSubmitted(true)
       toast.success(result.message || 'Message sent successfully!')
       
-      // Reset form
       setFormData({
         name: '',
         email: '',
@@ -135,13 +135,13 @@ export default function ContactPage() {
     {
       icon: PhoneIcon,
       title: 'Phone',
-      details: ['+91 98765 43210', '+91 98765 43211'],
+      details: ['+91 00000 00000'],
       description: 'Call us for immediate assistance'
     },
     {
       icon: EnvelopeIcon,
       title: 'Email',
-      details: ['info@homeshoppie.com', 'support@homeshoppie.com'],
+      details: ['support@homeshoppie.com'],
       description: 'Send us an email anytime'
     },
     {
@@ -158,66 +158,82 @@ export default function ContactPage() {
     }
   ]
 
-  // const subjects = [
-  //   'General Inquiry',
-  //   'Product Question',
-  //   'Order Support',
-  //   'Bulk Orders',
-  //   'Partnership',
-  //   'Feedback',
-  //   'Technical Issue',
-  //   'Other'
-  // ]
-
   if (submitted) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <CheckCircleIcon className="h-16 w-16 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Message Sent!</h2>
-          <p className="text-gray-600 mb-6">
-            Thank you for reaching out to us. We've received your message and will respond within 24 hours.
+      <main className="min-h-screen bg-[#faf9f5] flex items-center justify-center px-4 py-20">
+        <div className="max-w-md w-full bg-white rounded-3xl border border-slate-200/80 shadow-sm p-8 text-center animate-fadeIn">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 mb-5">
+            <CheckCircleIcon className="h-9 w-9" />
+          </div>
+          <h2 className="text-2xl font-extrabold text-slate-950 mb-2">Message Sent!</h2>
+          <p className="text-sm text-slate-600 mb-8 leading-relaxed">
+            Thank you for reaching out to us. We have received your message and will respond within 24 hours.
           </p>
           <button
             onClick={() => setSubmitted(false)}
-            className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors"
+            className="w-full inline-flex items-center justify-center h-11 rounded-xl bg-slate-950 text-white text-xs font-semibold hover:bg-slate-800 transition-colors shadow-sm"
           >
             Send Another Message
           </button>
         </div>
-      </div>
+      </main>
     )
   }
 
   return (
-    <div className="bg-white min-h-screen">
-      {/* Header */}
-      <div className="bg-gray-50 border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">Contact Us</h1>
-            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+    <div className="bg-[#faf9f5] min-h-screen text-slate-950 pb-24">
+      
+      {/* Hero Header */}
+      <section className="relative overflow-hidden border-b border-stone-200/70 bg-white py-12 sm:py-16">
+        <div className="absolute right-0 -top-32 h-80 w-80 rounded-full bg-emerald-100/40 blur-3xl pointer-events-none" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <div className="mb-6">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-950 transition-colors uppercase tracking-wider"
+            >
+              <ArrowLeftIcon className="h-4 w-4" />
+              <span>Back to Home</span>
+            </Link>
+          </div>
+
+          <div className="text-center max-w-2xl mx-auto space-y-3">
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200/80 bg-emerald-50 px-3 py-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-800">
+                Customer Support Hub
+              </span>
+            </div>
+
+            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-950">
+              Get in Touch with Us
+            </h1>
+
+            <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
               We'd love to hear from you. Get in touch with our friendly team for any questions or support.
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-          {/* Contact Form */}
-          <div className="bg-white">
+      {/* Main Grid */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 sm:pt-16">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-start">
+          
+          {/* Contact Form Column */}
+          <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-10 shadow-xs">
             <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <ChatBubbleLeftRightIcon className="h-6 w-6 text-green-600" />
+              <h2 className="text-xl sm:text-2xl font-bold text-slate-950 mb-2 flex items-center gap-2.5">
+                <ChatBubbleLeftRightIcon className="h-6 w-6 text-primary-600" />
                 Send us a Message
               </h2>
-              <p className="text-gray-600">
-                Fill out the form below and we'll get back to you as soon as possible.
+              <p className="text-xs sm:text-sm text-slate-500">
+                Fill out the form below and our team will get back to you promptly.
               </p>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-5">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Input
                   id="name"
@@ -260,16 +276,16 @@ export default function ContactPage() {
                   fullWidth
                 />
                 
-                <div className="space-y-1">
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700">
-                    Category
+                <div className="space-y-1.5">
+                  <label htmlFor="category" className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
+                    Inquiry Category
                   </label>
                   <select
                     id="category"
                     name="category"
                     value={formData.category}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 text-sm"
+                    className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl bg-slate-50/50 text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                   >
                     <option value="GENERAL">General Inquiry</option>
                     <option value="PRODUCT_INQUIRY">Product Question</option>
@@ -303,7 +319,7 @@ export default function ContactPage() {
                 name="message"
                 label="Message"
                 placeholder="Tell us how we can help you..."
-                rows={6}
+                rows={5}
                 value={formData.message}
                 onChange={handleInputChange}
                 error={errors.message}
@@ -323,143 +339,134 @@ export default function ContactPage() {
                 Send Message
               </Button>
 
-              <p className="text-sm text-gray-500">
-                * Required fields. We'll respond within 24 hours during business days.
+              <p className="text-xs text-slate-400">
+                * Required fields. We protect your privacy and respond within 24 hours.
               </p>
             </form>
           </div>
 
-          {/* Contact Information */}
-          <div>
-            <div className="mb-8">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Get in Touch</h2>
-              <p className="text-gray-600">
-                Reach out to us through any of these channels. We're here to help with all your traditional food needs.
-              </p>
-            </div>
-
-            <div className="space-y-8">
-              {contactInfo.map((info, index) => {
-                const IconComponent = info.icon
-                return (
-                  <div key={index} className="flex items-start gap-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                        <IconComponent className="h-6 w-6 text-green-600" />
+          {/* Contact Information & Highlights Column */}
+          <div className="lg:col-span-5 space-y-6">
+            
+            {/* Channels Box */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs space-y-6">
+              <h3 className="text-lg font-bold text-slate-950 mb-2">Direct Channels</h3>
+              
+              <div className="space-y-6">
+                {contactInfo.map((info, index) => {
+                  const IconComponent = info.icon
+                  return (
+                    <div key={index} className="flex items-start gap-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center border border-amber-200/60">
+                          <IconComponent className="h-5 w-5 text-amber-700" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-sm font-bold text-slate-900 mb-0.5">
+                          {info.title}
+                        </h4>
+                        <p className="text-xs text-slate-400 mb-1">
+                          {info.description}
+                        </p>
+                        {info.details.map((detail, idx) => (
+                          <p key={idx} className="text-slate-700 font-semibold text-sm">
+                            {detail}
+                          </p>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex-1">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                        {info.title}
-                      </h3>
-                      <p className="text-sm text-gray-500 mb-2">
-                        {info.description}
-                      </p>
-                      {info.details.map((detail, idx) => (
-                        <p key={idx} className="text-gray-900 font-medium">
-                          {detail}
-                        </p>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
 
-            {/* Additional Info */}
-            <div className="mt-8 p-6 bg-gray-50 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            {/* Why Choose Us Card */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs">
+              <h3 className="text-base font-bold text-slate-950 mb-4">
                 Why Choose HomeShoppie?
               </h3>
-              <ul className="space-y-2 text-gray-600">
-                <li className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  Authentic traditional products
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  Made with organic ingredients
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  Fast and reliable delivery
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  24/7 customer support
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircleIcon className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  100% satisfaction guarantee
-                </li>
+              <ul className="space-y-3 text-xs sm:text-sm text-slate-600">
+                {[
+                  "Authentic traditional products",
+                  "Made with organic ingredients",
+                  "Fast and reliable delivery across India",
+                  "Dedicated customer support team",
+                  "100% satisfaction guarantee"
+                ].map((item, idx) => (
+                  <li key={idx} className="flex items-center gap-2.5">
+                    <CheckCircleIcon className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                    <span>{item}</span>
+                  </li>
+                ))}
               </ul>
             </div>
 
-            {/* Emergency Contact */}
-            <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <h4 className="text-md font-semibold text-red-800 mb-2">
-                🚨 Emergency Support
+            {/* Emergency Support Notice */}
+            <div className="p-5 bg-rose-50/80 border border-rose-200/60 rounded-3xl">
+              <h4 className="text-xs font-bold uppercase tracking-wider text-rose-800 mb-1">
+                🚨 Urgent Order Support
               </h4>
-              <p className="text-red-700 text-sm">
-                For urgent order issues or emergencies, call our 24/7 helpline: 
-                <span className="font-bold"> +91 98765 43210</span>
+              <p className="text-rose-700 text-xs sm:text-sm leading-relaxed">
+                For immediate order dispatch modifications or urgent help, call our helpline: 
+                <span className="font-bold block mt-0.5 text-slate-950">+91 00000 00000</span>
               </p>
             </div>
+
           </div>
         </div>
       </div>
 
       {/* FAQ Section */}
-      <div className="bg-gray-50 border-t border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Frequently Asked Questions
-            </h2>
-            <p className="text-gray-600">
-              Quick answers to common questions
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              {
-                question: "What are your delivery areas?",
-                answer: "We deliver across India. Delivery times vary from 1-7 days depending on location."
-              },
-              {
-                question: "Do you offer bulk discounts?",
-                answer: "Yes! Contact us for special pricing on bulk orders above ₹5,000."
-              },
-              {
-                question: "Are your products organic?",
-                answer: "Most of our products are made with organic ingredients. Check individual product descriptions."
-              },
-              {
-                question: "What's your return policy?",
-                answer: "We offer 7-day returns for unopened products. Contact us for return authorization."
-              },
-              {
-                question: "Do you have a mobile app?",
-                answer: "Currently we operate through our website. A mobile app is coming soon!"
-              },
-              {
-                question: "Can I track my order?",
-                answer: "Yes, you'll receive tracking information via email once your order ships."
-              }
-            ].map((faq, index) => (
-              <div key={index} className="bg-white p-6 rounded-lg shadow-sm">
-                <h3 className="text-md font-semibold text-gray-900 mb-2">
-                  {faq.question}
-                </h3>
-                <p className="text-gray-600 text-sm">
-                  {faq.answer}
-                </p>
-              </div>
-            ))}
-          </div>
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 mt-16 border-t border-stone-200/70">
+        <div className="text-center mb-10">
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-950 mb-2">
+            Frequently Asked Questions
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Quick answers to common questions about our policies and services.
+          </p>
         </div>
-      </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[
+            {
+              question: "What are your delivery areas?",
+              answer: "Chúng tôi delivers across India. Delivery times vary from 1-7 days depending on your location."
+            },
+            {
+              question: "Do you offer bulk discounts?",
+              answer: "Yes! Contact us for special pricing on bulk orders above ₹5,000."
+            },
+            {
+              question: "Are your products organic?",
+              answer: "Most of our products are made with organic ingredients. Check individual product descriptions."
+            },
+            {
+              question: "What's your return policy?",
+              answer: "We offer 7-day returns for unopened products. Contact us for return authorization."
+            },
+            {
+              question: "How can I track my shipment?",
+              answer: "Visit our Track Order page to check real-time courier statuses using your Order ID."
+            },
+            {
+              question: "Is Cash on Delivery available?",
+              answer: "Yes, COD is available for eligible pin codes across India during checkout."
+            }
+          ].map((faq, index) => (
+            <div key={index} className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between">
+              <h3 className="text-sm font-bold text-slate-900 mb-2">
+                {faq.question}
+              </h3>
+              <p className="text-slate-600 text-xs sm:text-sm leading-relaxed">
+                {faq.answer}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
     </div>
   )
 }

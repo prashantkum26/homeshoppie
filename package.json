@@ -38,6 +38,7 @@
     "next-auth": "^4.24.13",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.13",
+    "prettier": "^3.9.9",
     "razorpay": "^2.9.2",
     "react": "19.2.0",
     "react-dom": "19.2.0",

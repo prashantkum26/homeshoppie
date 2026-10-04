@@ -13,60 +13,60 @@ interface CategoryWithProductCount extends Category {
   productCount: number
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<Category> | { error: string }>> {
-  try {
-    const body: CategoryCreateInput = await request.json()
-    const { name, description, slug, image } = body
+// export async function POST(request: NextRequest): Promise<NextResponse<ApiResponse<Category> | { error: string }>> {
+//   try {
+//     const body: CategoryCreateInput = await request.json()
+//     const { name, description, slug, image } = body
 
-    // Validate required fields
-    if (!name || !slug) {
-      return NextResponse.json(
-        { error: 'Name and slug are required' },
-        { status: 400 }
-      )
-    }
+//     // Validate required fields
+//     if (!name || !slug) {
+//       return NextResponse.json(
+//         { error: 'Name and slug are required' },
+//         { status: 400 }
+//       )
+//     }
 
-    // Check if category already exists
-    const existingCategory = await prisma.category.findFirst({
-      where: {
-        OR: [
-          { name },
-          { slug }
-        ]
-      }
-    })
+//     // Check if category already exists
+//     const existingCategory = await prisma.category.findFirst({
+//       where: {
+//         OR: [
+//           { name },
+//           { slug }
+//         ]
+//       }
+//     })
 
-    if (existingCategory) {
-      return NextResponse.json(
-        { error: 'Category already exists' },
-        { status: 409 }
-      )
-    }
+//     if (existingCategory) {
+//       return NextResponse.json(
+//         { error: 'Category already exists' },
+//         { status: 409 }
+//       )
+//     }
 
-    const category = await prisma.category.create({
-      data: {
-        name,
-        description: description || null,
-        slug,
-        image: image || null
-      }
-    })
+//     const category = await prisma.category.create({
+//       data: {
+//         name,
+//         description: description || null,
+//         slug,
+//         image: image || null
+//       }
+//     })
 
-    const response: ApiResponse<Category> = {
-      success: true,
-      data: category,
-      message: 'Category created successfully'
-    }
+//     const response: ApiResponse<Category> = {
+//       success: true,
+//       data: category,
+//       message: 'Category created successfully'
+//     }
 
-    return NextResponse.json(response, { status: 201 })
-  } catch (error) {
-    console.error('Error creating category:', error)
-    return NextResponse.json(
-      { error: 'Failed to create category' },
-      { status: 500 }
-    )
-  }
-}
+//     return NextResponse.json(response, { status: 201 })
+//   } catch (error) {
+//     console.error('Error creating category:', error)
+//     return NextResponse.json(
+//       { error: 'Failed to create category' },
+//       { status: 500 }
+//     )
+//   }
+// }
 
 export async function GET(request: NextRequest): Promise<NextResponse<ApiResponse<Category[] | CategoryWithProductCount[]> | { error: string }>> {
   try {

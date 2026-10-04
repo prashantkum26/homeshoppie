@@ -54,7 +54,7 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="space-y-16">
+    <div /*className="space-y-16"*/>
       <HeroSection heroSlides={sliderCategories} />
       <CategoryGrid />
       <FeaturedProducts featuredProducts={products} />

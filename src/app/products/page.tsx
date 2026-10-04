@@ -31,6 +31,12 @@ interface Product {
   } | null
 }
 
+interface Category {
+  id: string | number
+  name: string
+  slug: string
+}
+
 interface ProductsResponse {
   success: boolean
   data: Product[]
@@ -44,6 +50,9 @@ interface ProductsResponse {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([
+    { id: '', name: 'All Categories', slug: '' }
+  ])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('name')
@@ -59,6 +68,33 @@ export default function ProductsPage() {
 
   const { addItem } = useCartStore()
 
+  // Fetch Categories on Mount
+  useEffect(() => {
+    async function fetchCategories() {
+      try {
+        const response = await fetch('/api/categories')
+        if (!response.ok) throw new Error('Failed to fetch categories')
+        const data = await response.json()
+        
+        const categoryList = Array.isArray(data) ? data : data.categories || data.data || []
+        
+        setCategories([
+          { id: '', name: 'All Categories', slug: '' },
+          ...categoryList.map((cat: any) => ({
+            id: cat.id || cat.slug,
+            name: cat.name,
+            slug: cat.slug
+          }))
+        ])
+      } catch (error) {
+        console.error('Error loading categories:', error)
+      }
+    }
+
+    fetchCategories()
+  }, [])
+
+  // Fetch Products
   useEffect(() => {
     let isMounted = true
 
@@ -113,7 +149,6 @@ export default function ProductsPage() {
         isMounted = false
       }
     } else {
-      // Immediate fetch for non-search filters
       fetchProducts()
     }
 
@@ -136,15 +171,6 @@ export default function ProductsPage() {
     setCurrentPage(page)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-
-  const categories = [
-    { value: '', label: 'All Categories' },
-    { value: 'ghee', label: 'Ghee' },
-    { value: 'oils', label: 'Oils' },
-    { value: 'sweets', label: 'Sweets' },
-    { value: 'namkeen', label: 'Namkeen' },
-    { value: 'pooja-items', label: 'Pooja Items' }
-  ]
 
   const sortOptions = [
     { value: 'name', label: 'Name (A-Z)' },
@@ -197,8 +223,8 @@ export default function ProductsPage() {
                 className="appearance-none bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               >
                 {categories.map((category) => (
-                  <option key={category.value} value={category.value}>
-                    {category.label}
+                  <option key={category.slug} value={category.slug}>
+                    {category.name}
                   </option>
                 ))}
               </select>
@@ -273,13 +299,11 @@ export default function ProductsPage() {
                 <Link href={`/products/${product.slug || product.id}`}>
                   <div className="aspect-square bg-gray-100 relative overflow-hidden">
                     {product.images && product.images.length > 0 ? (
-                      // Display actual product image
                       <img
                         src={product.images[0]}
                         alt={product.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          // Fallback to placeholder icon if image fails to load
                           const target = e.target as HTMLImageElement
                           target.style.display = 'none'
                           const fallback = target.nextElementSibling as HTMLElement
@@ -287,15 +311,6 @@ export default function ProductsPage() {
                         }}
                       />
                     ) : null}
-
-                    {/* Fallback placeholder - shown when no images or image fails to load */}
-                    {/* <div 
-                      className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
-                        product.images && product.images.length > 0 ? 'hidden' : 'flex'
-                      }`}
-                    >
-                      <span className="text-6xl">{getCategoryIcon(product.category?.name || "")}</span>
-                    </div> */}
 
                     {!product.images?.length && (
                       <div className="absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
@@ -305,7 +320,6 @@ export default function ProductsPage() {
                             alt={product?.category?.name || ""}
                             className="w-full h-full object-cover"
                             onError={(e) => {
-                              // Fallback to emoji icon if image fails to load
                               const target = e.target as HTMLImageElement
                               target.style.display = 'none'
                               const fallback = target.nextElementSibling as HTMLElement
@@ -313,16 +327,13 @@ export default function ProductsPage() {
                             }}
                           />
                         ) : null}
-                        {/* Fallback emoji - shown when no image or image fails to load */}
                         <div
-                          className={`w-full h-full flex items-center justify-center ${getCategoryImagePath(product?.category?.name || "") ? 'hidden' : 'flex'
-                            }`}
+                          className={`w-full h-full flex items-center justify-center ${getCategoryImagePath(product?.category?.name || "") ? 'hidden' : 'flex'}`}
                         >
                           <span className="text-4xl">{getCategoryIcon(product?.category?.name || "")}</span>
                         </div>
                       </div>
                     )}
-
 
                     {product.discountPercent > 0 && (
                       <div className="absolute top-2 left-2">
@@ -358,8 +369,7 @@ export default function ProductsPage() {
                     <span className="text-sm text-gray-500">
                       {product.category?.name}
                     </span>
-                    <span className={`text-xs px-2 py-1 rounded ${product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                      }`}>
+                    <span className={`text-xs px-2 py-1 rounded ${product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                       {product.inStock ? 'In Stock' : 'Out of Stock'}
                     </span>
                   </div>
@@ -382,10 +392,11 @@ export default function ProductsPage() {
                         handleAddToCart(product)
                       }}
                       disabled={!product.inStock}
-                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${product.inStock
+                      className={`flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        product.inStock
                           ? 'bg-primary-600 hover:bg-primary-700 text-white'
                           : 'bg-gray-400 text-gray-600 cursor-not-allowed'
-                        }`}
+                      }`}
                     >
                       <ShoppingCartIcon className="h-4 w-4" />
                       Add
@@ -447,10 +458,11 @@ export default function ProductsPage() {
                 <button
                   key={page}
                   onClick={() => handlePageChange(page)}
-                  className={`px-4 py-2 rounded-lg ${isActive
+                  className={`px-4 py-2 rounded-lg ${
+                    isActive
                       ? 'bg-primary-600 text-white'
                       : 'border border-gray-300 hover:bg-gray-50'
-                    }`}
+                  }`}
                 >
                   {page}
                 </button>

@@ -11,11 +11,11 @@ export const getCategoryIcon = (categoryName: string) => {
 
 export const getCategoryImagePath = (categoryName: string) => {
   switch (categoryName) {
-    case 'Ghee': return '/images/category/ghee.svg'
-    case 'Oils': return '/images/category/oils.svg'
-    case 'Sweets': return '/images/category/sweets.svg'
-    case 'Namkeen': return '/images/category/namkeen.svg'
-    case 'Pooja Items': return '/images/category/pooja-items.svg'
-    default: return null
+    case 'Ghee': return '/images/category/ghee.png'
+    case 'Oils': return '/images/category/oil.png'
+    case 'Sweets': return '/images/category/sweets.png'
+    case 'Namkeen': return '/images/category/namkeen.png'
+    case 'Pooja Items': return '/images/category/pooja-items.png'
+    default: return '/images/category/default.png'
   }
 }

@@ -273,7 +273,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { id: addressId } = await params
+    const { id: addressId } = await params;
 
     // Check if address exists and belongs to user
     const existingAddress = await prisma.address.findUnique({

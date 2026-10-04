@@ -15,6 +15,7 @@ import {
 import { HeartIcon as HeartSolidIcon } from '@heroicons/react/24/solid'
 import useCartStore from '@/store/cartStore'
 import toast from 'react-hot-toast'
+import { getCategoryIcon, getCategoryImagePath } from '@/utils/imageUtil'
 
 interface Product {
   id: string
@@ -29,6 +30,7 @@ interface Product {
   images?: string[]
   weight?: number | null
   unit?: string | null
+  weightUnit?: string | null
   tags?: string[]
   category?: {
     name: string
@@ -44,36 +46,14 @@ interface Category {
   image?: string
 }
 
-const getProductIcon = (categoryName?: string) => {
-  switch (categoryName) {
-    case 'Ghee': return '🧈'
-    case 'Oils': return '🫒'
-    case 'Sweets': return '🍪'
-    case 'Namkeen': return '🥨'
-    case 'Pooja Items': return '🪔'
-    default: return '📦'
-  }
-}
-
-const getCategoryImagePath = (categoryName?: string) => {
-  switch (categoryName) {
-    case 'Ghee': return '/images/category/ghee.svg'
-    case 'Oils': return '/images/category/oils.svg'
-    case 'Sweets': return '/images/category/sweets.svg'
-    case 'Namkeen': return '/images/category/namkeen.svg'
-    case 'Pooja Items': return '/images/category/pooja-items.svg'
-    default: return null
-  }
-}
-
 const getCategoryColor = (categoryName?: string) => {
   switch (categoryName) {
-    case 'Ghee': return 'from-yellow-100 to-yellow-200'
-    case 'Oils': return 'from-green-100 to-green-200'
-    case 'Sweets': return 'from-orange-100 to-orange-200'
-    case 'Namkeen': return 'from-red-100 to-red-200'
-    case 'Pooja Items': return 'from-pink-100 to-pink-200'
-    default: return 'from-gray-100 to-gray-200'
+    case 'Ghee': return 'from-amber-50 to-amber-100/60 border-amber-200/60'
+    case 'Oils': return 'from-emerald-50 to-emerald-100/60 border-emerald-200/60'
+    case 'Sweets': return 'from-orange-50 to-orange-100/60 border-orange-200/60'
+    case 'Namkeen': return 'from-rose-50 to-rose-100/60 border-rose-200/60'
+    case 'Pooja Items': return 'from-purple-50 to-purple-100/60 border-purple-200/60'
+    default: return 'from-slate-50 to-slate-100/60 border-slate-200/60'
   }
 }
 
@@ -103,7 +83,7 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
     }
     
     addItem({ ...product, quantity: 1 } as any)
-    toast.success('Added to cart!')
+    toast.success(`Added ${product.name} to cart!`)
   }
 
   const toggleLike = (e: React.MouseEvent) => {
@@ -113,101 +93,97 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
     toast.success(isLiked ? 'Removed from wishlist' : 'Added to wishlist')
   }
 
-  const displayWeight = product.weight 
-    ? `${product.weight}${product.unit || 'g'}` 
-    : product.unit || ''
+  const categoryName = product.category?.name || (product as any).categoryName || ''
+  
+  const rawUnit = product.unit || product.weightUnit || ''
+  const formattedUnit = rawUnit === 'KILOGRAMS' ? 'kg' : rawUnit === 'GRAMS' ? 'g' : rawUnit === 'LITER' ? 'L' : rawUnit === 'MILLILITER' ? 'ml' : rawUnit.toLowerCase()
+  const displayWeight = product.weight ? `${product.weight}${formattedUnit}` : rawUnit
+
+  const categoryImg = getCategoryImagePath(categoryName)
+  const categoryIcn = getCategoryIcon(categoryName)
+  const hasImages = product.images && product.images.length > 0 && !product.images[0].includes('dummy')
 
   if (viewMode === 'list') {
     return (
       <Link href={`/products/${product.slug || product.id}`} className="group block">
-        <div className="bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 p-4 border border-gray-200">
-          <div className="flex gap-4">
-            <div className="flex-shrink-0 w-24 h-24 bg-gray-100 rounded-lg overflow-hidden relative">
-              {getCategoryImagePath(product.category?.name) ? (
+        <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-4 border border-slate-200/80">
+          <div className="flex gap-4 items-center">
+            <div className="flex-shrink-0 w-24 h-24 bg-slate-100 rounded-xl overflow-hidden relative flex items-center justify-center">
+              {hasImages ? (
                 <img
-                  src={getCategoryImagePath(product.category?.name)!}
-                  alt={product.category?.name || 'Product'}
+                  src={product.images![0]}
+                  alt={product.name}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    const target = e.target as HTMLImageElement
-                    target.style.display = 'none'
-                    const fallback = target.nextElementSibling as HTMLElement
-                    if (fallback) fallback.style.display = 'flex'
-                  }}
                 />
-              ) : null}
-              <div 
-                className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
-                  getCategoryImagePath(product.category?.name) ? 'hidden' : 'flex'
-                }`}
-              >
-                <span className="text-2xl">{getProductIcon(product.category?.name)}</span>
-              </div>
+              ) : categoryImg ? (
+                <img
+                  src={categoryImg}
+                  alt={categoryName}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="text-3xl">{categoryIcn || '📦'}</span>
+              )}
               {product.discountPercent > 0 && (
-                <span className="absolute top-1 left-1 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
+                <span className="absolute top-1 left-1 bg-rose-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-sm">
                   -{product.discountPercent}%
                 </span>
               )}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-start gap-4">
                 <div className="flex-1">
-                  <h3 className="text-sm font-medium text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-primary-600">
+                      {categoryName}
+                    </span>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                      product.inStock ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                    }`}>
+                      {product.inStock ? 'In Stock' : 'Out of Stock'}
+                    </span>
+                  </div>
+
+                  <h3 className="text-sm font-semibold text-slate-900 mb-1 group-hover:text-primary-600 transition-colors">
                     {product.name}
                   </h3>
-                  <p className="text-sm text-gray-500 mb-2 line-clamp-2">{product.description}</p>
+                  <p className="text-xs text-slate-500 mb-2 line-clamp-1">{product.description}</p>
                   
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {product.inStock ? `In Stock (${product.stock})` : 'Out of Stock'}
-                    </span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {product.tags?.slice(0, 2).map((tag) => (
-                      <span
-                        key={tag}
-                        className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-
                   <div className="flex items-center gap-2">
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-base font-bold text-slate-950">
                       ₹{product.price}
                     </span>
-                    {product.compareAtPrice && (
-                      <span className="text-sm text-gray-500 line-through">
+                    {product.compareAtPrice && product.compareAtPrice > product.price && (
+                      <span className="text-xs text-slate-400 line-through">
                         ₹{product.compareAtPrice}
                       </span>
                     )}
-                    <span className="text-sm text-gray-500">• {displayWeight}</span>
+                    {displayWeight && (
+                      <span className="text-xs text-slate-400 ml-2">({displayWeight})</span>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={toggleLike}
-                    className="p-2 rounded-full hover:bg-gray-100 transition-colors"
+                    aria-label="Toggle wishlist"
+                    className="p-2 rounded-full hover:bg-slate-100 transition-colors"
                   >
                     {isLiked ? (
-                      <HeartSolidIcon className="h-5 w-5 text-red-500" />
+                      <HeartSolidIcon className="h-5 w-5 text-rose-600" />
                     ) : (
-                      <HeartIcon className="h-5 w-5 text-gray-600" />
+                      <HeartIcon className="h-5 w-5 text-slate-400 hover:text-slate-600" />
                     )}
                   </button>
                   <button
                     onClick={handleAddToCart}
                     disabled={!product.inStock}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
                       product.inStock
-                        ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                        : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                        ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm'
+                        : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                     }`}
                   >
                     {product.inStock ? 'Add to Cart' : 'Out of Stock'}
@@ -222,38 +198,34 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
   }
 
   return (
-    <Link href={`/products/${product.slug || product.id}`} className="group block">
-      <div className="bg-white rounded-xl shadow-sm hover:shadow-lg transition-all duration-300 transform group-hover:scale-105 overflow-hidden">
-        <div className="relative aspect-square bg-gray-100 overflow-hidden">
-          {getCategoryImagePath(product.category?.name) ? (
+    <Link href={`/products/${product.slug || product.id}`} className="group block h-full">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-xl hover:border-slate-300 transition-all duration-300 flex flex-col h-full overflow-hidden">
+        {/* Compact Image Container */}
+        <div className="relative h-44 w-full bg-slate-50 overflow-hidden flex items-center justify-center">
+          {hasImages ? (
             <img
-              src={getCategoryImagePath(product.category?.name)!}
-              alt={product.category?.name || 'Product'}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = 'none'
-                const fallback = target.nextElementSibling as HTMLElement
-                if (fallback) fallback.style.display = 'flex'
-              }}
+              src={product.images![0]}
+              alt={product.name}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             />
-          ) : null}
-          <div 
-            className={`absolute inset-0 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center ${
-              getCategoryImagePath(product.category?.name) ? 'hidden' : 'flex'
-            }`}
-          >
-            <span className="text-5xl">{getProductIcon(product.category?.name)}</span>
-          </div>
+          ) : categoryImg ? (
+            <img
+              src={categoryImg}
+              alt={categoryName}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <span className="text-4xl">{categoryIcn || '📦'}</span>
+          )}
           
-          <div className="absolute top-3 left-3 flex flex-col gap-1">
+          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10">
             {product.discountPercent > 0 && (
-              <span className="bg-red-500 text-white text-xs px-2 py-1 rounded">
-                -{product.discountPercent}%
+              <span className="bg-rose-600 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded shadow-sm">
+                -{product.discountPercent}% OFF
               </span>
             )}
             {!product.inStock && (
-              <span className="bg-gray-500 text-white text-xs px-2 py-1 rounded">
+              <span className="bg-slate-900 text-white text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded">
                 Out of Stock
               </span>
             )}
@@ -261,66 +233,68 @@ function ProductCard({ product, viewMode = 'grid' }: ProductCardProps) {
 
           <button
             onClick={toggleLike}
-            className="absolute top-3 right-3 p-2 rounded-full bg-white/80 hover:bg-white transition-colors"
+            aria-label="Toggle wishlist"
+            className="absolute top-2.5 right-2.5 z-10 p-2 rounded-full bg-white/90 backdrop-blur-sm hover:bg-white transition-colors shadow-sm"
           >
             {isLiked ? (
-              <HeartSolidIcon className="h-5 w-5 text-red-500" />
+              <HeartSolidIcon className="h-4 w-4 text-rose-600" />
             ) : (
-              <HeartIcon className="h-5 w-5 text-gray-600" />
+              <HeartIcon className="h-4 w-4 text-slate-500 hover:text-slate-900" />
             )}
           </button>
+        </div>
 
-          <div className="absolute bottom-3 left-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+        {/* Content Body */}
+        <div className="p-4 flex flex-1 flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-1 mb-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-primary-600 truncate">
+                {categoryName || 'Item'}
+              </span>
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
+                product.inStock ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+              }`}>
+                {product.inStock ? 'In Stock' : 'Out of Stock'}
+              </span>
+            </div>
+
+            <h3 className="text-sm font-semibold text-slate-900 line-clamp-1 group-hover:text-primary-600 transition-colors mb-1">
+              {product.name}
+            </h3>
+            
+            <p className="text-xs text-slate-500 line-clamp-2 mb-2 leading-relaxed">
+              {product.description}
+            </p>
+
+            {displayWeight && (
+              <p className="text-[11px] font-medium text-slate-400 mb-2">Weight: {displayWeight}</p>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2 mt-auto">
+            <div>
+              <span className="text-base font-bold tracking-tight text-slate-950">
+                ₹{product.price}
+              </span>
+              {product.compareAtPrice && product.compareAtPrice > product.price && (
+                <span className="text-xs text-slate-400 line-through ml-1.5">
+                  ₹{product.compareAtPrice}
+                </span>
+              )}
+            </div>
+
             <button
               onClick={handleAddToCart}
               disabled={!product.inStock}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
                 product.inStock
-                  ? 'bg-primary-600 hover:bg-primary-700 text-white'
-                  : 'bg-gray-400 text-gray-600 cursor-not-allowed'
+                  ? 'bg-primary-600 hover:bg-primary-700 text-white shadow-sm shadow-primary-600/20'
+                  : 'bg-slate-100 text-slate-400 cursor-not-allowed'
               }`}
             >
-              <ShoppingCartIcon className="h-4 w-4" />
-              {product.inStock ? 'Add to Cart' : 'Out of Stock'}
+              <ShoppingCartIcon className="h-3.5 w-3.5" />
+              <span>{product.inStock ? 'Add' : 'Unavailable'}</span>
             </button>
-          </div>
-        </div>
-
-        <div className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className={`text-xs px-2 py-1 rounded ${
-              product.inStock ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-            }`}>
-              {product.inStock ? 'In Stock' : 'Out of Stock'}
-            </span>
-          </div>
-
-          <h3 className="text-sm font-medium text-gray-900 mb-1 group-hover:text-primary-600 transition-colors">
-            {product.name}
-          </h3>
-          
-          <p className="text-sm text-gray-500 mb-2">{displayWeight}</p>
-          
-          <div className="flex flex-wrap gap-1 mb-3">
-            {product.tags?.slice(0, 2).map((tag) => (
-              <span
-                key={tag}
-                className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-gray-900">
-              ₹{product.price}
-            </span>
-            {product.compareAtPrice && (
-              <span className="text-sm text-gray-500 line-through">
-                ₹{product.compareAtPrice}
-              </span>
-            )}
           </div>
         </div>
       </div>
@@ -342,86 +316,65 @@ export default function CategoryPage() {
   const [pagination, setPagination] = useState({ page: 1, total: 0, pages: 0 })
 
   useEffect(() => {
-  let cancelled = false
+    let cancelled = false
 
-  const fetchData = async () => {
-    setLoading(true)
+    const fetchData = async () => {
+      setLoading(true)
 
-    try {
-      const categoryResponse = await fetch('/api/categories')
+      try {
+        const categoryResponse = await fetch('/api/categories')
+        if (!categoryResponse.ok) throw new Error('Failed to fetch categories')
 
-      if (!categoryResponse.ok) {
-        throw new Error('Failed to fetch categories')
-      }
+        const categoryResult = await categoryResponse.json()
+        const categories = categoryResult.success ? categoryResult.data : categoryResult.categories || categoryResult || []
 
-      const categoryResult = await categoryResponse.json()
-      const categories = categoryResult.success ? categoryResult.data : []
+        const foundCategory = categories.find(
+          (cat: Category) => cat.slug === slug
+        )
 
-      const foundCategory = categories.find(
-        (cat: Category) => cat.slug === slug
-      )
-
-      if (!foundCategory) {
-        notFound()
-        return
-      }
-
-      if (cancelled) return
-
-      setCategory(foundCategory)
-
-      const queryParams = new URLSearchParams({
-        page: '1',
-        limit: '50',
-        categorySlug: slug as string,
-        sortBy: sortBy.split('-')[0],
-        sortOrder: sortBy.includes('-desc') ? 'desc' : 'asc',
-        ...(searchQuery && { search: searchQuery }),
-        ...(onlyInStock && { inStockOnly: 'true' }),
-      })
-
-      const productsResponse = await fetch(
-        `/api/products?${queryParams}`
-      )
-
-      if (!productsResponse.ok) {
-        throw new Error('Failed to fetch products')
-      }
-
-      const data = await productsResponse.json()
-
-      if (cancelled) return
-
-      setProducts(data.data || [])
-      setPagination(
-        data.pagination || {
-          page: 1,
-          total: 0,
-          pages: 0,
+        if (!foundCategory) {
+          notFound()
+          return
         }
-      )
-    } catch (error) {
-      if (!cancelled) {
-        console.error('Error fetching data:', error)
-        toast.error('Failed to load category data')
-      }
-    } finally {
-      if (!cancelled) {
-        setLoading(false)
+
+        if (cancelled) return
+        setCategory(foundCategory)
+
+        const queryParams = new URLSearchParams({
+          page: '1',
+          limit: '50',
+          categorySlug: slug as string,
+          sortBy: sortBy.split('-')[0],
+          sortOrder: sortBy.includes('-desc') ? 'desc' : 'asc',
+          ...(searchQuery && { search: searchQuery }),
+          ...(onlyInStock && { inStockOnly: 'true' }),
+        })
+
+        const productsResponse = await fetch(`/api/products?${queryParams}`)
+        if (!productsResponse.ok) throw new Error('Failed to fetch products')
+
+        const data = await productsResponse.json()
+        if (cancelled) return
+
+        setProducts(data.data || [])
+        setPagination(data.pagination || { page: 1, total: 0, pages: 0 })
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Error fetching data:', error)
+          toast.error('Failed to load category data')
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
       }
     }
-  }
 
-  const debounceTimer = setTimeout(
-    fetchData,
-    searchQuery ? 500 : 0
-  )
+    const debounceTimer = setTimeout(fetchData, searchQuery ? 400 : 0)
 
-  return () => {
-    cancelled = true
-    clearTimeout(debounceTimer)
-  }
-}, [slug, searchQuery, sortBy, onlyInStock])
+    return () => {
+      cancelled = true
+      clearTimeout(debounceTimer)
+    }
+  }, [slug, searchQuery, sortBy, onlyInStock])
 
   const clearFilters = () => {
     setSearchQuery('')
@@ -429,10 +382,10 @@ export default function CategoryPage() {
     setOnlyInStock(false)
   }
 
-  if (loading) {
+  if (loading && !category) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
       </div>
     )
   }
@@ -440,9 +393,9 @@ export default function CategoryPage() {
   if (!category) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Category Not Found</h1>
-          <Link href="/categories" className="btn-primary px-6 py-3">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-slate-900">Category Not Found</h1>
+          <Link href="/categories" className="btn-primary px-6 py-2.5 text-sm rounded-xl">
             Back to Categories
           </Link>
         </div>
@@ -453,91 +406,84 @@ export default function CategoryPage() {
   return (
     <div className="bg-white min-h-screen">
       {/* Hero Section */}
-      <div className={`bg-gradient-to-r ${getCategoryColor(category.name)} py-16`}>
-        <div className="container-custom">
-          <div className="flex items-center mb-6">
+      <div className={`bg-gradient-to-r ${getCategoryColor(category.name)} py-12 sm:py-16 border-b border-slate-100`}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="mb-6">
             <Link
               href="/categories"
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
+              className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-slate-950 transition-colors uppercase tracking-wider"
             >
-              <ArrowLeftIcon className="h-5 w-5" />
-              Back to Categories
+              <ArrowLeftIcon className="h-4 w-4" />
+              <span>Back to Categories</span>
             </Link>
           </div>
           
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
             <div className="flex-shrink-0">
-              <div className="w-24 h-24 bg-white rounded-2xl flex items-center justify-center shadow-lg overflow-hidden">
+              <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-md overflow-hidden border border-white/80">
                 {getCategoryImagePath(category.name) ? (
                   <img
                     src={getCategoryImagePath(category.name)!}
                     alt={category.name}
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Fallback to emoji icon if image fails to load
-                      const target = e.target as HTMLImageElement
-                      target.style.display = 'none'
-                      const fallback = target.nextElementSibling as HTMLElement
-                      if (fallback) fallback.style.display = 'flex'
-                    }}
                   />
-                ) : null}
-                {/* Fallback emoji - shown when no image or image fails to load */}
-                <div 
-                  className={`w-full h-full flex items-center justify-center ${
-                    getCategoryImagePath(category.name) ? 'hidden' : 'flex'
-                  }`}
-                >
-                  <span className="text-4xl">{getProductIcon(category.name)}</span>
-                </div>
+                ) : (
+                  <span className="text-3xl">{getCategoryIcon(category.name)}</span>
+                )}
               </div>
             </div>
             
             <div className="flex-1">
-              <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
+              <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-950 tracking-tight mb-2">
                 {category.name}
               </h1>
-              <p className="text-xl text-gray-700 max-w-2xl">
+              <p className="text-sm sm:text-base text-slate-600 max-w-2xl leading-relaxed">
                 {category.description}
               </p>
-              <p className="mt-4 text-lg text-gray-600">
-                {pagination.total} products available
-              </p>
+              <div className="mt-3 inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-white/80 backdrop-blur-sm text-slate-700 shadow-sm">
+                {pagination.total} {pagination.total === 1 ? 'product' : 'products'} available
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="border-b border-gray-200 bg-gray-50">
-        <div className="container-custom py-6">
-          <div className="mb-6">
-            <div className="relative max-w-md">
+      {/* Filter & Toolbar Bar */}
+      <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur-md shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
+            
+            {/* Search Input */}
+            <div className="relative max-w-sm w-full">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                <MagnifyingGlassIcon className="h-4 w-4 text-slate-400" />
               </div>
               <input
                 type="text"
-                placeholder="Search products..."
+                placeholder="Search products in category..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                className="block w-full pl-9 pr-3 py-2 border border-slate-200 rounded-xl text-sm bg-slate-50/50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
-          </div>
 
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex items-center gap-4">
-              <p className="text-gray-600">
-                {loading ? 'Loading...' : `${products.length} products found`}
-              </p>
-            </div>
+            {/* Controls & View Switcher */}
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center cursor-pointer bg-slate-50 px-3 py-2 rounded-xl border border-slate-200/80">
+                <input
+                  type="checkbox"
+                  checked={onlyInStock}
+                  onChange={(e) => setOnlyInStock(e.target.checked)}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500 h-4 w-4"
+                />
+                <span className="ml-2 text-xs font-medium text-slate-700">In Stock Only</span>
+              </label>
 
-            <div className="flex items-center gap-4">
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                aria-label="Sort products by"
+                className="border border-slate-200 bg-slate-50/50 rounded-xl px-3 py-2 text-xs font-medium text-slate-700 focus:ring-2 focus:ring-primary-500 focus:bg-white focus:outline-none"
               >
                 {sortOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -546,77 +492,70 @@ export default function CategoryPage() {
                 ))}
               </select>
 
-              <div className="flex border border-gray-300 rounded-md overflow-hidden">
+              <div className="flex border border-slate-200 bg-slate-50/50 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setViewMode('grid')}
-                  className={`p-2 ${
+                  aria-label="Grid view"
+                  className={`p-2 transition-colors ${
                     viewMode === 'grid'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-white text-gray-400 hover:text-gray-600'
+                      : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  <Squares2X2Icon className="h-5 w-5" />
+                  <Squares2X2Icon className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => setViewMode('list')}
-                  className={`p-2 ${
+                  aria-label="List view"
+                  className={`p-2 transition-colors ${
                     viewMode === 'list'
                       ? 'bg-primary-600 text-white'
-                      : 'bg-white text-gray-400 hover:text-gray-600'
+                      : 'text-slate-400 hover:text-slate-600'
                   }`}
                 >
-                  <ListBulletIcon className="h-5 w-5" />
+                  <ListBulletIcon className="h-4 w-4" />
                 </button>
               </div>
             </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-4 items-center">
-            <label className="flex items-center">
-              <input
-                type="checkbox"
-                checked={onlyInStock}
-                onChange={(e) => setOnlyInStock(e.target.checked)}
-                className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-              />
-              <span className="ml-2 text-sm text-gray-700">In Stock Only</span>
-            </label>
-
-            {(searchQuery || onlyInStock || sortBy !== 'name-asc') && (
+          {(searchQuery || onlyInStock || sortBy !== 'name-asc') && (
+            <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
+              <span className="text-xs text-slate-500">Active filters:</span>
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-1 px-3 py-1 text-sm text-gray-600 hover:text-gray-800"
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors"
               >
-                <XMarkIcon className="h-4 w-4" />
-                Clear Filters
+                <XMarkIcon className="h-3.5 w-3.5" />
+                <span>Reset all</span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Products Grid */}
-      <div className="container-custom py-12">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary-600"></div>
           </div>
         ) : products.length > 0 ? (
           <div className={
             viewMode === 'grid'
-              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'
-              : 'space-y-4'
+              ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5'
+              : 'space-y-3 max-w-3xl mx-auto'
           }>
             {products.map((product) => (
               <ProductCard key={product.id} product={product} viewMode={viewMode} />
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg mb-4">No products found matching your criteria</p>
+          <div className="text-center py-16 bg-slate-50 rounded-3xl border border-dashed border-slate-200">
+            <p className="text-slate-600 font-medium text-base mb-3">No products found matching your criteria</p>
             <button
               onClick={clearFilters}
-              className="btn-primary px-6 py-3"
+              className="btn-primary px-5 py-2 text-xs rounded-xl shadow-sm"
             >
               Clear Filters
             </button>
@@ -625,24 +564,24 @@ export default function CategoryPage() {
       </div>
 
       {/* Call to Action */}
-      <div className="bg-gray-50 py-16">
-        <div className="container-custom text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+      <div className="bg-slate-50 border-t border-slate-100 py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h2 className="text-2xl font-bold text-slate-900 mb-2">
             Looking for Something Else?
           </h2>
-          <p className="text-lg text-gray-600 mb-8 max-w-2xl mx-auto">
-            Explore our other categories or contact us for custom requirements.
+          <p className="text-sm text-slate-600 mb-6 max-w-lg mx-auto">
+            Explore our other handcrafted categories or contact us for custom orders.
           </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/categories"
-              className="btn-primary px-6 py-3"
+              className="btn-primary px-6 py-3 text-xs font-semibold rounded-xl shadow-md shadow-primary-600/20"
             >
               Browse All Categories
             </Link>
             <Link
               href="/contact"
-              className="btn-secondary px-6 py-3"
+              className="inline-flex items-center justify-center px-6 py-3 text-xs font-semibold rounded-xl border border-slate-300 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
             >
               Contact Us
             </Link>
