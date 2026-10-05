@@ -11,6 +11,9 @@ APP_NAME="homeshoppie"
 APP_PORT="3000"
 NODE_HEAP_MB="640"
 
+ENV_DIR="/etc/${APP_NAME}"
+ENV_FILE="${ENV_DIR}/.env.production"
+
 # ------------------------------------------------------------
 # Colors
 # ------------------------------------------------------------
@@ -83,6 +86,8 @@ echo "Node: $(node -v)"
 # 3. Check NPM
 # ============================================================
 
+log "Checking npm..."
+
 if ! command -v npm >/dev/null 2>&1; then
     error "npm is not installed."
     exit 1
@@ -91,15 +96,18 @@ fi
 echo "NPM: $(npm -v)"
 
 # ============================================================
-# 4. Install PM2 if required
+# 4. Check PM2
 # ============================================================
 
 log "Checking PM2..."
 
 if command -v pm2 >/dev/null 2>&1; then
+
     success "PM2 already installed."
     echo "PM2: $(pm2 -v)"
+
 else
+
     warn "PM2 not found."
     log "Installing PM2 globally..."
 
@@ -112,10 +120,70 @@ else
 
     success "PM2 installed."
     echo "PM2: $(pm2 -v)"
+
 fi
 
 # ============================================================
-# 5. Check disk
+# 5. Check production environment
+# ============================================================
+
+log "Checking production environment..."
+
+if [[ ! -d "$ENV_DIR" ]]; then
+    error "Environment directory does not exist:"
+    error "$ENV_DIR"
+    echo
+    echo "Run setup-env.sh first."
+    exit 1
+fi
+
+if [[ ! -f "$ENV_FILE" ]]; then
+    error "Production environment file not found:"
+    error "$ENV_FILE"
+    echo
+    echo "Run setup-env.sh first."
+    exit 1
+fi
+
+if [[ ! -r "$ENV_FILE" ]]; then
+    error "Production environment file is not readable:"
+    error "$ENV_FILE"
+    exit 1
+fi
+
+ENV_PERMISSIONS=$(stat -c "%a" "$ENV_FILE")
+
+if [[ "$ENV_PERMISSIONS" != "600" ]]; then
+    error "Invalid permissions on environment file."
+    error "Expected: 600"
+    error "Current : $ENV_PERMISSIONS"
+    exit 1
+fi
+
+success "Production environment file found."
+echo "Environment: $ENV_FILE"
+echo "Permissions : $ENV_PERMISSIONS"
+
+# ============================================================
+# 6. Load production environment
+# ============================================================
+
+log "Loading production environment..."
+
+set -a
+source "$ENV_FILE"
+set +a
+
+export NODE_ENV="production"
+export PORT="$APP_PORT"
+
+success "Production environment loaded."
+
+# Do NOT print environment variables here.
+# They may contain passwords, tokens, API keys, etc.
+
+# ============================================================
+# 7. Check disk
 # ============================================================
 
 log "Checking disk space..."
@@ -133,7 +201,7 @@ fi
 success "Disk space OK."
 
 # ============================================================
-# 6. Check memory
+# 8. Check memory
 # ============================================================
 
 log "Current memory:"
@@ -145,20 +213,21 @@ echo "Swap:"
 swapon --show || true
 
 # ============================================================
-# 7. Stop PM2
+# 9. Stop current PM2 application
 # ============================================================
 
-log "Stopping PM2 applications..."
+log "Stopping ${APP_NAME}..."
 
-pm2 stop all || true
+pm2 stop "$APP_NAME" || true
 
 sleep 2
 
-log "Memory after stopping PM2:"
+log "Memory after stopping application:"
+
 free -h
 
 # ============================================================
-# 8. Install dependencies
+# 10. Install dependencies
 # ============================================================
 
 log "Installing dependencies..."
@@ -182,20 +251,25 @@ fi
 success "Dependencies installed."
 
 # ============================================================
-# 9. TypeScript check
+# 11. TypeScript check
 # ============================================================
 
 log "Running TypeScript check..."
 
 if [[ -f "tsconfig.json" ]]; then
+
     npx tsc --noEmit
+
     success "TypeScript check passed."
+
 else
+
     warn "tsconfig.json not found."
+
 fi
 
 # ============================================================
-# 10. ESLint
+# 12. ESLint
 # ============================================================
 
 if npm run | grep -qE '^  lint'; then
@@ -213,19 +287,21 @@ else
 fi
 
 # ============================================================
-# 11. Security audit
+# 13. Security audit
 # ============================================================
 
 log "Checking dependency vulnerabilities..."
 
 npm audit --audit-level=high || {
+
     warn "High/critical vulnerabilities detected."
     warn "Review npm audit output."
     warn "Deployment will continue."
+
 }
 
 # ============================================================
-# 12. Clean previous Next.js build
+# 14. Clean previous Next.js build
 # ============================================================
 
 log "Cleaning previous Next.js build..."
@@ -235,7 +311,7 @@ rm -rf .next
 success "Previous .next directory removed."
 
 # ============================================================
-# 13. Configure Node heap
+# 15. Configure Node heap
 # ============================================================
 
 export NODE_OPTIONS="--max-old-space-size=${NODE_HEAP_MB}"
@@ -250,7 +326,7 @@ console.log('V8 heap limit: ' + Math.round(heap) + ' MB');
 "
 
 # ============================================================
-# 14. Production build
+# 16. Production build
 # ============================================================
 
 log "Starting production build..."
@@ -264,47 +340,61 @@ npm run build
 success "Production build completed."
 
 # ============================================================
-# 15. Verify build
+# 17. Verify Next.js build
 # ============================================================
 
 log "Verifying Next.js build..."
 
 if [[ ! -d ".next" ]]; then
+
     error ".next directory does not exist."
     exit 1
+
 fi
 
 if [[ ! -f ".next/BUILD_ID" ]]; then
+
     warn ".next/BUILD_ID not found."
+
 fi
 
 success "Next.js build verified."
 
 # ============================================================
-# 16. Check package start script
+# 18. Verify production start script
 # ============================================================
 
 log "Checking production start script..."
 
-if ! node -e "
-const p=require('./package.json');
-if (!p.scripts || !p.scripts.start) process.exit(1);
-"; then
+START_SCRIPT=$(node -e "
+const p = require('./package.json');
 
-    error "package.json does not contain a 'start' script."
+if (!p.scripts || !p.scripts.start) {
+    process.exit(1);
+}
+
+process.stdout.write(p.scripts.start);
+")
+
+if [[ "$START_SCRIPT" != *"next start"* ]]; then
+
+    error "Invalid production start script:"
+    error "$START_SCRIPT"
 
     echo
-    echo "You need:"
-    echo '"start": "next start"'
+    echo "Expected something like:"
+    echo '"start": "next start -p 3000"'
     echo
 
     exit 1
+
 fi
 
-success "Production start script found."
+success "Production start script found:"
+echo "$START_SCRIPT"
 
 # ============================================================
-# 17. Start / Restart PM2 application
+# 19. Start / Restart PM2
 # ============================================================
 
 log "Configuring PM2 application..."
@@ -323,14 +413,14 @@ else
 
     pm2 start npm \
         --name "$APP_NAME" \
-        -- start -p "$APP_PORT"
+        -- start
 
 fi
 
 success "PM2 application started."
 
 # ============================================================
-# 18. Save PM2 process list
+# 20. Save PM2 process list
 # ============================================================
 
 log "Saving PM2 process list..."
@@ -340,12 +430,14 @@ pm2 save
 success "PM2 process list saved."
 
 # ============================================================
-# 19. PM2 startup configuration
+# 21. PM2 startup configuration
 # ============================================================
 
 log "Checking PM2 startup configuration..."
 
-if systemctl is-enabled pm2-ec2-user >/dev/null 2>&1; then
+PM2_SERVICE="pm2-$(whoami)"
+
+if systemctl is-enabled "$PM2_SERVICE" >/dev/null 2>&1; then
 
     success "PM2 startup already configured."
 
@@ -354,19 +446,20 @@ else
     warn "PM2 startup service is not configured."
 
     echo
-    echo "Run the following command once:"
+    echo "Run this command once:"
     echo
 
     pm2 startup systemd -u "$(whoami)" --hp "$HOME"
 
     echo
     warn "Copy and run the command printed above."
-    warn "Then run: pm2 save"
+    warn "Then run:"
+    echo "pm2 save"
 
 fi
 
 # ============================================================
-# 20. Final status
+# 22. Final PM2 status
 # ============================================================
 
 echo
@@ -374,13 +467,17 @@ log "Final PM2 status:"
 
 pm2 status
 
+# ============================================================
+# 23. Final memory
+# ============================================================
+
 echo
 log "Final memory:"
 
 free -h
 
 # ============================================================
-# 21. Optional local health check
+# 24. Application health check
 # ============================================================
 
 log "Checking application locally..."
@@ -399,14 +496,19 @@ if command -v curl >/dev/null 2>&1; then
     else
 
         warn "Application did not respond on port ${APP_PORT}."
-        warn "Check: pm2 logs ${APP_NAME}"
+        warn "Check:"
+        echo "pm2 logs ${APP_NAME}"
 
     fi
+
+else
+
+    warn "curl is not installed. Skipping health check."
 
 fi
 
 # ============================================================
-# DONE
+# 25. DONE
 # ============================================================
 
 echo
@@ -416,6 +518,7 @@ echo "============================================================"
 echo
 echo "Application : ${APP_NAME}"
 echo "Port        : ${APP_PORT}"
+echo "Environment : ${ENV_FILE}"
 echo "Node        : $(node -v)"
 echo "NPM         : $(npm -v)"
 echo "PM2         : $(pm2 -v)"
@@ -427,6 +530,6 @@ echo "  pm2 logs ${APP_NAME}"
 echo "  pm2 restart ${APP_NAME}"
 echo "  pm2 save"
 echo
-echo "To check local health:"
+echo "Local health:"
 echo "  curl http://127.0.0.1:${APP_PORT}"
 echo
