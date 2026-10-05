@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import type { Category, ApiResponse } from '@/types'
 
-interface CategoryCreateInput {
-  name: string
-  description?: string
-  slug: string
-  image?: string
-}
+// interface CategoryCreateInput {
+//   name: string
+//   description?: string
+//   slug: string
+//   image?: string
+// }
 
 interface CategoryWithProductCount extends Category {
   productCount: number

@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { 
   TruckIcon, 
   MagnifyingGlassIcon, 
-  CheckCircleIcon, 
+  // CheckCircleIcon, 
   ClockIcon, 
-  ShoppingBagIcon, 
+  // ShoppingBagIcon, 
   ArrowLeftIcon 
 } from '@heroicons/react/24/outline'
 import toast from 'react-hot-toast'
