@@ -746,13 +746,14 @@ if [[ "${AUTH_STATUS}" == "enabled" ]]; then
 
     if [[ "${EXISTING_CREDENTIALS_VALID}" == "true" ]]; then
 
-        if [[ "${PASSWORD_SOURCE}" == "existing" ]]; then
+        if [[ "${PASSWORD_SOURCE}" == "existing" ||
+              "${PASSWORD_SOURCE}" == "existing-entered" ]]; then
             ok "Existing MongoDB password retained"
         else
             log "Changing MongoDB application password..."
 
-            MONGO_CURRENT_USER="${MONGO_USER}" \
-            MONGO_CURRENT_PASSWORD="${EXISTING_DB_PASSWORD:-${MONGO_PASSWORD}}" \
+            MONGO_CURRENT_USER="${EXISTING_DB_USER:-${MONGO_USER}}" \
+            MONGO_CURRENT_PASSWORD="${EXISTING_DB_PASSWORD}" \
             MONGO_NEW_PASSWORD="${MONGO_PASSWORD}" \
             mongosh \
                 --quiet \
