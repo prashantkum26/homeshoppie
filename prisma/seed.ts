@@ -8,31 +8,31 @@ const categories = [
     name: 'Ghee',
     description: 'Pure homemade ghee varieties made using traditional methods',
     slug: 'ghee',
-    image: '/images/category-ghee.jpg'
+    image: '/images/category/ghee.png'
   },
   {
     name: 'Oils',
     description: 'Cold-pressed oils extracted using traditional sarso mill',
     slug: 'oils',
-    image: '/images/category-oils.jpg'
+    image: '/images/category/oil.png'
   },
   {
     name: 'Sweets',
     description: 'Traditional sweets and desserts made with authentic recipes',
     slug: 'sweets',
-    image: '/images/category-sweets.jpg'
+    image: '/images/category/sweets.png'
   },
   {
     name: 'Namkeen',
     description: 'Crispy and delicious savory snacks',
     slug: 'namkeen',
-    image: '/images/category-namkeen.jpg'
+    image: '/images/category/namkeen.png'
   },
   {
     name: 'Pooja Items',
     description: 'Sacred items for worship and religious ceremonies',
     slug: 'pooja-items',
-    image: '/images/category-pooja.jpg'
+    image: '/images/category/pooja-items.png'
   }
 ]
 
@@ -43,7 +43,7 @@ const products = [
     description: 'Made from fresh cow milk using traditional bilona method. Rich in vitamins A, D, E, and K. Perfect for cooking, frying, and Ayurvedic remedies.',
     price: 599,
     compareAtPrice: 699,
-    images: ['/images/cow-ghee-1.jpg', '/images/cow-ghee-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Ghee',
     stock: 50,
     slug: 'pure-cow-ghee',
@@ -57,7 +57,7 @@ const products = [
     description: 'Premium buffalo ghee made using ancient bilona method. Higher nutritional value with rich taste and aroma. Ideal for traditional cooking.',
     price: 799,
     compareAtPrice: 899,
-    images: ['/images/buffalo-ghee-1.jpg', '/images/buffalo-ghee-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Ghee',
     stock: 30,
     slug: 'buffalo-ghee-bilona',
@@ -71,7 +71,7 @@ const products = [
     description: 'Perfect blend of cow and buffalo ghee combining the best of both. Balanced taste and nutrition for everyday cooking needs.',
     price: 699,
     compareAtPrice: 799,
-    images: ['/images/mixed-ghee-1.jpg', '/images/mixed-ghee-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Ghee',
     stock: 40,
     slug: 'mixed-ghee-cow-buffalo',
@@ -87,7 +87,7 @@ const products = [
     description: 'Pure mustard oil extracted using traditional wooden churner. Rich in omega-3 fatty acids and antioxidants. Perfect for cooking and massage.',
     price: 299,
     compareAtPrice: 349,
-    images: ['/images/mustard-oil-1.jpg', '/images/mustard-oil-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Oils',
     stock: 60,
     slug: 'cold-pressed-mustard-oil',
@@ -101,7 +101,7 @@ const products = [
     description: 'Traditional til oil extracted from premium sesame seeds. Rich in vitamin E and minerals. Great for cooking and skin care.',
     price: 399,
     compareAtPrice: 449,
-    images: ['/images/sesame-oil-1.jpg', '/images/sesame-oil-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Oils',
     stock: 35,
     slug: 'organic-sesame-oil',
@@ -130,7 +130,7 @@ const products = [
     description: 'Delicious sweet dumplings filled with khoya, dry fruits, and coconut. Perfect for Holi and other celebrations.',
     price: 299,
     compareAtPrice: 349,
-    images: ['/images/gujiya-1.jpg', '/images/gujiya-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Sweets',
     stock: 45,
     slug: 'gujiya-karanji',
@@ -144,7 +144,7 @@ const products = [
     description: 'Soft and spongy Bengali sweet soaked in flavored milk. Made with fresh chenna and aromatic cardamom.',
     price: 249,
     compareAtPrice: 299,
-    images: ['/images/kheer-mohan-1.jpg', '/images/kheer-mohan-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Sweets',
     stock: 25,
     slug: 'kheer-mohan',
@@ -160,7 +160,7 @@ const products = [
     description: 'Crispy mixture of sev, peanuts, curry leaves, and spices. Perfect tea-time snack with balanced spicy and tangy flavors.',
     price: 149,
     compareAtPrice: 179,
-    images: ['/images/mixed-namkeen-1.jpg', '/images/mixed-namkeen-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Namkeen',
     stock: 100,
     slug: 'mixed-namkeen',
@@ -174,7 +174,7 @@ const products = [
     description: 'Crispy potato sticks seasoned with traditional spices. Light, crunchy, and perfectly spiced for snacking anytime.',
     price: 129,
     compareAtPrice: 149,
-    images: ['/images/aloo-bhujia-1.jpg', '/images/aloo-bhujia-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Namkeen',
     stock: 75,
     slug: 'aloo-bhujia',
@@ -188,7 +188,7 @@ const products = [
     description: 'Roasted fox nuts seasoned with aromatic spices. Healthy, low-calorie snack perfect for weight watchers.',
     price: 179,
     compareAtPrice: 199,
-    images: ['/images/masala-makhana-1.jpg', '/images/masala-makhana-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Namkeen',
     stock: 60,
     slug: 'masala-makhana',
@@ -204,7 +204,7 @@ const products = [
     description: 'Handcrafted brass diyas perfect for daily worship and festivals. Set of 5 traditional oil lamps with beautiful finish.',
     price: 399,
     compareAtPrice: null,
-    images: ['/images/brass-diya-1.jpg', '/images/brass-diya-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Pooja Items',
     stock: 40,
     slug: 'brass-diya-set',
@@ -218,7 +218,7 @@ const products = [
     description: 'Pure camphor tablets for aarti and worship. Natural and chemical-free with long-lasting fragrance.',
     price: 89,
     compareAtPrice: 99,
-    images: ['/images/camphor-1.jpg', '/images/camphor-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Pooja Items',
     stock: 120,
     slug: 'pure-camphor-tablets',
@@ -232,7 +232,7 @@ const products = [
     description: 'Traditional kumkum and sindoor made from natural ingredients. Safe for daily use with vibrant red color.',
     price: 149,
     compareAtPrice: 169,
-    images: ['/images/kumkum-sindoor-1.jpg', '/images/kumkum-sindoor-2.jpg'],
+    images: ['/images/category/default.png'],
     categoryName: 'Pooja Items',
     stock: 85,
     slug: 'kumkum-sindoor-pack',
