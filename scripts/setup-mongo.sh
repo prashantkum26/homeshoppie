@@ -5,41 +5,58 @@ set -Eeuo pipefail
 # HomeShoppie - MongoDB 8.0 Setup
 # Amazon Linux 2023
 #
-# MongoDB:
-#   Host       : 127.0.0.1
-#   Port       : 27017
-#   Database   : homeshoppie
-#   User       : homeshoppie_admin
+# Architecture:
+#   1. MongoDB management user:
+#        - Used only by this setup/maintenance script
+#        - userAdminAnyDatabase + readWriteAnyDatabase
+#        - Credentials are NEVER written to the application .env file
 #
-# Environment:
-#   /etc/homeshoppie/.env.production
+#   2. HomeShoppie application user:
+#        - homeshoppie_admin
+#        - readWrite on homeshoppie only
+#        - Used by Next.js through DATABASE_URL
 #
-# This script:
-#   - Installs/configures MongoDB 8.0
-#   - Binds MongoDB to localhost only
-#   - Creates/updates the HomeShoppie MongoDB user
-#   - Handles existing MongoDB passwords safely
-#   - Supports generated and manually entered new passwords
-#   - Enables MongoDB authorization
-#   - Updates DATABASE_URL with the correct authSource
-#   - Safely loads .env.production into the ec2-user PM2 process
-#   - Restarts/starts HomeShoppie with --update-env
-#   - Saves PM2 state
-#   - Does not insert test data
+# Normal password rotation does NOT disable MongoDB authorization.
+#
+# First install:
+#   - MongoDB authorization is initially disabled
+#   - Creates the management user
+#   - Creates/updates the application user
+#   - Enables authorization
+#
+# Existing installation:
+#   - Requires valid management-user credentials
+#   - Uses management user to rotate application password
+#
+# Options:
+#   1) Keep existing application password
+#   2) Generate a new application password
+#   3) Enter a new application password manually
 ###############################################################################
 
+set -Eeuo pipefail
+
 ENV_FILE="/etc/homeshoppie/.env.production"
+
 MONGO_REPO_FILE="/etc/yum.repos.d/mongodb-org-8.0.repo"
 MONGO_CONFIG="/etc/mongod.conf"
+MONGO_SERVICE="mongod"
+
 MONGO_DATABASE="homeshoppie"
-MONGO_USER="homeshoppie_admin"
 MONGO_HOST="127.0.0.1"
 MONGO_PORT="27017"
-MONGO_SERVICE="mongod"
+
+MONGO_APP_USER="homeshoppie_admin"
+MONGO_APP_AUTH_DB="homeshoppie"
+
+MONGO_MGMT_USER="homeshoppie_db_admin"
+MONGO_MGMT_AUTH_DB="admin"
+
 APP_USER="ec2-user"
 APP_NAME="homeshoppie"
 APP_DIR="/home/ec2-user/homeshoppie"
 APP_PORT="3000"
+
 MIN_PASSWORD_LENGTH=16
 
 if [[ -t 1 ]]; then
@@ -73,6 +90,10 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+###############################################################################
+# ROOT
+###############################################################################
+
 [[ "${EUID}" -eq 0 ]] || die "Run with sudo: sudo ./setup-mongo.sh"
 
 ###############################################################################
@@ -85,16 +106,24 @@ section "Checking operating system"
 # shellcheck disable=SC1091
 source /etc/os-release
 
-[[ "${ID:-}" == "amzn" ]] || die "This script requires Amazon Linux. Detected: ${PRETTY_NAME:-unknown}"
+[[ "${ID:-}" == "amzn" ]] ||
+    die "This script requires Amazon Linux. Detected: ${PRETTY_NAME:-unknown}"
+
 ok "Operating System: ${PRETTY_NAME:-unknown}"
 
 ARCH="$(uname -m)"
 echo "Architecture: ${ARCH}"
 
 case "${ARCH}" in
-    x86_64) ok "Supported architecture" ;;
-    aarch64) warn "Verify MongoDB 8.0 repository support for aarch64." ;;
-    *) die "Unsupported architecture: ${ARCH}" ;;
+    x86_64)
+        ok "Supported architecture"
+        ;;
+    aarch64)
+        warn "Verify MongoDB 8.0 repository support for aarch64."
+        ;;
+    *)
+        die "Unsupported architecture: ${ARCH}"
+        ;;
 esac
 
 ###############################################################################
@@ -107,36 +136,46 @@ for cmd in dnf systemctl node openssl sudo; do
     command_exists "$cmd" || die "Required command not found: $cmd"
 done
 
-[[ -f "${ENV_FILE}" ]] || die "Environment file not found: ${ENV_FILE}"
-[[ -d "${APP_DIR}" ]] || die "Application directory not found: ${APP_DIR}"
+[[ -f "${ENV_FILE}" ]] ||
+    die "Environment file not found: ${ENV_FILE}"
+
+[[ -d "${APP_DIR}" ]] ||
+    die "Application directory not found: ${APP_DIR}"
 
 NODE_VERSION="$(node --version)"
-ok "Node.js found: ${NODE_VERSION}"
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
-(( NODE_MAJOR >= 20 )) || warn "Node.js 20+ is recommended."
+
+ok "Node.js found: ${NODE_VERSION}"
+
+if (( NODE_MAJOR < 20 )); then
+    warn "Node.js 20+ is recommended."
+fi
 
 chmod 600 "${ENV_FILE}"
 chown "${APP_USER}:${APP_USER}" "${ENV_FILE}"
+
 ok "Environment file permissions secured"
 
 ###############################################################################
-# REPOSITORY
+# MONGODB REPOSITORY
 ###############################################################################
 
 section "Configuring MongoDB 8.0 repository"
 
-cat > "${MONGO_REPO_FILE}" <<'EOF_REPO'
+cat > "${MONGO_REPO_FILE}" <<'EOF'
 [mongodb-org-8.0]
 name=MongoDB Repository
 baseurl=https://repo.mongodb.org/yum/amazon/2023/mongodb-org/8.0/$basearch/
 gpgcheck=1
 enabled=1
 gpgkey=https://pgp.mongodb.com/server-8.0.asc
-EOF_REPO
+EOF
 
 chmod 644 "${MONGO_REPO_FILE}"
+
 dnf clean all >/dev/null 2>&1 || true
 dnf makecache -y >/dev/null
+
 ok "MongoDB repository configured"
 
 ###############################################################################
@@ -157,15 +196,16 @@ command_exists mongosh || die "mongosh was not installed."
 
 MONGOD_VERSION="$(mongod --version | awk '/db version/ {print $3; exit}')"
 MONGOSH_VERSION="$(mongosh --version)"
+
 echo "MongoDB : ${MONGOD_VERSION}"
 echo "mongosh : ${MONGOSH_VERSION}"
 
 ###############################################################################
-# MONGODB CONFIGURATION HELPERS
+# MONGODB CONFIG HELPERS
 ###############################################################################
 
 get_auth_status() {
-    if grep -Eq '^[[:space:]]*authorization:[[:space:]]*enabled[[:space:]]*$' "${MONGO_CONFIG}" 2>/dev/null; then
+    if grep -Eq '^[[:space:]]*authorization:[[:space:]]*enabled[[:space:]]*$' "${MONGO_CONFIG}"; then
         echo "enabled"
     else
         echo "disabled"
@@ -177,6 +217,7 @@ set_mongo_authorization() {
     local tmp
 
     [[ "${mode}" == "enabled" || "${mode}" == "disabled" ]] || return 1
+
     tmp="$(mktemp)"
 
     awk -v mode="${mode}" '
@@ -199,7 +240,8 @@ set_mongo_authorization() {
             in_security=0
         }
 
-        in_security && /^[[:space:]]+authorization:[[:space:]]*(enabled|disabled)[[:space:]]*$/ {
+        in_security &&
+        /^[[:space:]]+authorization:[[:space:]]*(enabled|disabled)[[:space:]]*$/ {
             if (!authorization_found) {
                 print "  authorization: " mode
                 authorization_found=1
@@ -231,50 +273,47 @@ set_mongo_authorization() {
 }
 
 ###############################################################################
-# NETWORK
+# NETWORK CONFIGURATION
 ###############################################################################
 
 section "Configuring MongoDB network"
 
-[[ -f "${MONGO_CONFIG}" ]] || die "MongoDB config not found: ${MONGO_CONFIG}"
+[[ -f "${MONGO_CONFIG}" ]] ||
+    die "MongoDB config not found: ${MONGO_CONFIG}"
 
 BACKUP="${MONGO_CONFIG}.homeshoppie-backup"
+
 if [[ ! -f "${BACKUP}" ]]; then
     cp -a "${MONGO_CONFIG}" "${BACKUP}"
     chmod 600 "${BACKUP}"
     ok "MongoDB configuration backup created"
 fi
 
-# Replace the entire net block's bindIp/port values without touching unrelated
-# MongoDB configuration. If no net block exists, append one.
-if grep -Eq '^net:[[:space:]]*$' "${MONGO_CONFIG}"; then
-    sed -i -E 's/^([[:space:]]*)bindIp:[[:space:]].*$/  bindIp: 127.0.0.1/' "${MONGO_CONFIG}"
-    sed -i -E 's/^([[:space:]]*)port:[[:space:]].*$/  port: 27017/' "${MONGO_CONFIG}"
-
-    if ! grep -Eq '^net:[[:space:]]*$' "${MONGO_CONFIG}"; then
-        die "MongoDB net configuration could not be verified."
-    fi
-
-    # Add missing keys immediately after net:. This handles a minimal net block.
-    if ! awk '/^net:[[:space:]]*$/ {found=1; next} found && /^[^[:space:]]/ {exit} found && /^[[:space:]]+bindIp:/{bind=1} END{exit !(bind)}' "${MONGO_CONFIG}"; then
-        sed -i '/^net:[[:space:]]*$/a\  bindIp: 127.0.0.1' "${MONGO_CONFIG}"
-    fi
-    if ! awk '/^net:[[:space:]]*$/ {found=1; next} found && /^[^[:space:]]/ {exit} found && /^[[:space:]]+port:/{port=1} END{exit !(port)}' "${MONGO_CONFIG}"; then
-        sed -i '/^net:[[:space:]]*$/a\  port: 27017' "${MONGO_CONFIG}"
-    fi
-else
-    cat >> "${MONGO_CONFIG}" <<'EOF_NET'
+if ! grep -Eq '^net:[[:space:]]*$' "${MONGO_CONFIG}"; then
+    cat >> "${MONGO_CONFIG}" <<'EOF'
 
 net:
   bindIp: 127.0.0.1
   port: 27017
-EOF_NET
+EOF
+else
+    if grep -Eq '^[[:space:]]+bindIp:' "${MONGO_CONFIG}"; then
+        sed -i -E 's/^[[:space:]]+bindIp:.*/  bindIp: 127.0.0.1/' "${MONGO_CONFIG}"
+    else
+        sed -i '/^net:[[:space:]]*$/a\  bindIp: 127.0.0.1' "${MONGO_CONFIG}"
+    fi
+
+    if grep -Eq '^[[:space:]]+port:' "${MONGO_CONFIG}"; then
+        sed -i -E 's/^[[:space:]]+port:.*/  port: 27017/' "${MONGO_CONFIG}"
+    else
+        sed -i '/^net:[[:space:]]*$/a\  port: 27017' "${MONGO_CONFIG}"
+    fi
 fi
 
 ok "MongoDB configured for ${MONGO_HOST}:${MONGO_PORT}"
 
 ###############################################################################
-# START / ENABLE
+# START MONGODB
 ###############################################################################
 
 section "Starting MongoDB"
@@ -288,45 +327,23 @@ else
     systemctl start "${MONGO_SERVICE}"
 fi
 
-systemctl is-active --quiet "${MONGO_SERVICE}" || {
+if ! systemctl is-active --quiet "${MONGO_SERVICE}"; then
     journalctl -u "${MONGO_SERVICE}" -n 50 --no-pager || true
     die "MongoDB failed to start."
-}
+fi
 
 ok "MongoDB is running"
 ok "MongoDB enabled at boot"
 
 wait_for_mongo() {
-    local authenticated="${1:-false}"
-
     for _ in {1..30}; do
-        if [[ "${authenticated}" == "true" ]]; then
-            if MONGO_TEST_USER="${MONGO_USER}" \
-                MONGO_TEST_PASSWORD="${MONGO_PASSWORD}" \
-                MONGO_TEST_AUTH_DB="${MONGO_AUTH_DB:-${MONGO_DATABASE}}" \
-                mongosh \
-                    --quiet \
-                    --host "${MONGO_HOST}" \
-                    --port "${MONGO_PORT}" \
-                    "${MONGO_TEST_AUTH_DB}" \
-                    --eval '
-                        if (!db.auth(
-                            process.env.MONGO_TEST_USER,
-                            process.env.MONGO_TEST_PASSWORD
-                        )) quit(1);
-                        quit(db.runCommand({ping: 1}).ok === 1 ? 0 : 1);
-                    ' >/dev/null 2>&1; then
-                return 0
-            fi
-        else
-            if mongosh \
-                --quiet \
-                --host "${MONGO_HOST}" \
-                --port "${MONGO_PORT}" \
-                --eval 'quit(db.runCommand({ping: 1}).ok === 1 ? 0 : 1)' \
-                >/dev/null 2>&1; then
-                return 0
-            fi
+        if mongosh \
+            --quiet \
+            --host "${MONGO_HOST}" \
+            --port "${MONGO_PORT}" \
+            --eval 'quit(db.runCommand({ping: 1}).ok === 1 ? 0 : 1)' \
+            >/dev/null 2>&1; then
+            return 0
         fi
         sleep 1
     done
@@ -334,106 +351,24 @@ wait_for_mongo() {
     return 1
 }
 
-wait_for_mongo false || die "MongoDB did not become ready."
+wait_for_mongo ||
+    die "MongoDB did not become ready."
 
 if command_exists ss; then
-    ss -lnt | grep -Eq "127\\.0\\.0\\.1:${MONGO_PORT}[[:space:]]" || \
+    ss -lnt | grep -Eq "127\.0\.0\.1:${MONGO_PORT}[[:space:]]" ||
         die "MongoDB is not listening on 127.0.0.1:${MONGO_PORT}"
 fi
 
 ok "MongoDB is listening on ${MONGO_HOST}:${MONGO_PORT}"
 
 ###############################################################################
-# READ DATABASE_URL SAFELY
+# AUTH STATE
 ###############################################################################
 
-section "Checking existing DATABASE_URL"
+AUTH_STATUS="$(get_auth_status)"
 
-EXISTING_DATABASE_URL="$(
-    node <<'NODE'
-const fs = require("fs");
-const file = "/etc/homeshoppie/.env.production";
-const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
-
-for (const line of lines) {
-    const value = line.trim();
-    if (!value || value.startsWith("#")) continue;
-
-    const match = value.match(/^DATABASE_URL\s*=\s*(.*)$/);
-    if (!match) continue;
-
-    let result = match[1].trim();
-    if (
-        result.length >= 2 &&
-        ((result.startsWith('"') && result.endsWith('"')) ||
-         (result.startsWith("'") && result.endsWith("'")))
-    ) {
-        result = result.slice(1, -1);
-    }
-
-    process.stdout.write(result);
-    process.exit(0);
-}
-NODE
-)"
-
-EXISTING_LOCAL_URL="false"
-EXISTING_DB_USER=""
-EXISTING_DB_PASSWORD=""
-EXISTING_AUTH_SOURCE=""
-
-if [[ -n "${EXISTING_DATABASE_URL}" ]]; then
-    PARSED="$(
-        DATABASE_URL="${EXISTING_DATABASE_URL}" \
-        EXPECTED_USER="${MONGO_USER}" \
-        EXPECTED_DB="${MONGO_DATABASE}" \
-        EXPECTED_HOST="${MONGO_HOST}" \
-        EXPECTED_PORT="${MONGO_PORT}" \
-        node <<'NODE'
-try {
-    const url = new URL(process.env.DATABASE_URL);
-    if (url.protocol !== "mongodb:") process.exit(0);
-
-    const host = url.hostname;
-    const port = url.port || "27017";
-    const db = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
-    const user = decodeURIComponent(url.username || "");
-    const password = decodeURIComponent(url.password || "");
-    const params = new URLSearchParams(url.search);
-    const authSource = params.get("authSource") || db || "admin";
-
-    const localHost = host === process.env.EXPECTED_HOST || host === "localhost";
-
-    if (
-        localHost &&
-        port === process.env.EXPECTED_PORT &&
-        db === process.env.EXPECTED_DB &&
-        user === process.env.EXPECTED_USER
-    ) {
-        process.stdout.write(["LOCAL", user, password, authSource].join("\t"));
-    }
-} catch {
-    process.exit(0);
-}
-NODE
-    )"
-
-    if [[ "${PARSED}" == LOCAL$'\t'* ]]; then
-        EXISTING_LOCAL_URL="true"
-        IFS=$'\t' read -r _ EXISTING_DB_USER EXISTING_DB_PASSWORD EXISTING_AUTH_SOURCE <<< "${PARSED}"
-
-        if [[ -n "${EXISTING_DB_PASSWORD}" ]]; then
-            ok "Existing local MongoDB credentials found"
-        else
-            warn "Existing local DATABASE_URL has no password."
-        fi
-    else
-        warn "Existing DATABASE_URL is not the expected local MongoDB URL."
-        warn "It will be replaced."
-    fi
-else
-    warn "No DATABASE_URL found."
-fi
+echo
+echo "MongoDB authorization: ${AUTH_STATUS}"
 
 ###############################################################################
 # PASSWORD HELPERS
@@ -443,12 +378,13 @@ generate_password() {
     openssl rand -hex 32
 }
 
-read_manual_password() {
+read_password() {
+    local label="$1"
     local password confirm
 
     while true; do
         echo
-        read -r -s -p "Enter MongoDB password: " password
+        read -r -s -p "${label}: " password
         echo
 
         [[ -n "${password}" ]] || {
@@ -461,7 +397,7 @@ read_manual_password() {
             continue
         }
 
-        read -r -s -p "Confirm MongoDB password: " confirm
+        read -r -s -p "Confirm password: " confirm
         echo
 
         [[ "${password}" == "${confirm}" ]] || {
@@ -475,61 +411,327 @@ read_manual_password() {
 }
 
 ###############################################################################
-# AUTH STATE
+# MONGOSH USER OPERATIONS
 ###############################################################################
 
-AUTH_STATUS="$(get_auth_status)"
-echo "MongoDB authorization: ${AUTH_STATUS}"
+create_management_user_without_auth() {
+    local password="$1"
+
+    MONGO_TARGET_USER="${MONGO_MGMT_USER}" \
+    MONGO_TARGET_PASSWORD="${password}" \
+    mongosh \
+        --quiet \
+        --host "${MONGO_HOST}" \
+        --port "${MONGO_PORT}" \
+        "${MONGO_MGMT_AUTH_DB}" \
+        --eval '
+            const username = process.env.MONGO_TARGET_USER;
+            const password = process.env.MONGO_TARGET_PASSWORD;
+
+            const existing = db.getUser(username);
+
+            if (existing) {
+                db.updateUser(username, {
+                    pwd: password,
+                    roles: [
+                        { role: "userAdminAnyDatabase", db: "admin" },
+                        { role: "readWriteAnyDatabase", db: "admin" }
+                    ]
+                });
+            } else {
+                db.createUser({
+                    user: username,
+                    pwd: password,
+                    roles: [
+                        { role: "userAdminAnyDatabase", db: "admin" },
+                        { role: "readWriteAnyDatabase", db: "admin" }
+                    ]
+                });
+            }
+
+            print("MANAGEMENT_USER_READY");
+        ' >/dev/null
+}
+
+validate_management_credentials() {
+    local username="$1"
+    local password="$2"
+
+    MONGO_AUTH_USER="${username}" \
+    MONGO_AUTH_PASSWORD="${password}" \
+    mongosh \
+        --quiet \
+        --host "${MONGO_HOST}" \
+        --port "${MONGO_PORT}" \
+        "${MONGO_MGMT_AUTH_DB}" \
+        --eval '
+            if (!db.auth(
+                process.env.MONGO_AUTH_USER,
+                process.env.MONGO_AUTH_PASSWORD
+            )) {
+                quit(1);
+            }
+
+            const u = db.getUser(process.env.MONGO_AUTH_USER);
+
+            if (!u) {
+                quit(1);
+            }
+
+            const hasUserAdmin = (u.roles || []).some(
+                r => r.role === "userAdminAnyDatabase" && r.db === "admin"
+            );
+
+            if (!hasUserAdmin) {
+                print("MISSING_USER_ADMIN_ROLE");
+                quit(2);
+            }
+
+            quit(0);
+        ' >/dev/null 2>&1
+}
+
+create_or_update_app_user() {
+    local admin_user="$1"
+    local admin_password="$2"
+    local app_password="$3"
+
+    MONGO_ADMIN_USER="${admin_user}" \
+    MONGO_ADMIN_PASSWORD="${admin_password}" \
+    MONGO_APP_USER_VALUE="${MONGO_APP_USER}" \
+    MONGO_APP_PASSWORD="${app_password}" \
+    mongosh \
+        --quiet \
+        --host "${MONGO_HOST}" \
+        --port "${MONGO_PORT}" \
+        "${MONGO_MGMT_AUTH_DB}" \
+        --eval '
+            if (!db.auth(
+                process.env.MONGO_ADMIN_USER,
+                process.env.MONGO_ADMIN_PASSWORD
+            )) {
+                throw new Error("Management-user authentication failed.");
+            }
+
+            const targetDb = db.getSiblingDB("homeshoppie");
+            const username = process.env.MONGO_APP_USER_VALUE;
+            const password = process.env.MONGO_APP_PASSWORD;
+
+            const existing = targetDb.getUser(username);
+
+            if (existing) {
+                targetDb.updateUser(username, {
+                    pwd: password,
+                    roles: [
+                        { role: "readWrite", db: "homeshoppie" }
+                    ]
+                });
+            } else {
+                targetDb.createUser({
+                    user: username,
+                    pwd: password,
+                    roles: [
+                        { role: "readWrite", db: "homeshoppie" }
+                    ]
+                });
+            }
+
+            print("APPLICATION_USER_READY");
+        ' >/dev/null
+}
+
+validate_app_credentials() {
+    local app_password="$1"
+
+    MONGO_APP_USER_VALUE="${MONGO_APP_USER}" \
+    MONGO_APP_PASSWORD="${app_password}" \
+    mongosh \
+        --quiet \
+        --host "${MONGO_HOST}" \
+        --port "${MONGO_PORT}" \
+        "${MONGO_APP_AUTH_DB}" \
+        --eval '
+            if (!db.auth(
+                process.env.MONGO_APP_USER_VALUE,
+                process.env.MONGO_APP_PASSWORD
+            )) {
+                quit(1);
+            }
+
+            quit(
+                db.runCommand({ ping: 1 }).ok === 1 ? 0 : 1
+            );
+        ' >/dev/null 2>&1
+}
 
 ###############################################################################
-# EXISTING CREDENTIALS / USER AUTH DATABASE
+# MANAGEMENT USER SETUP
 ###############################################################################
 
-EXISTING_CREDENTIALS_VALID="false"
-CURRENT_AUTH_DB="${EXISTING_AUTH_SOURCE:-${MONGO_DATABASE}}"
-MONGO_AUTH_DB="${CURRENT_AUTH_DB}"
+MGMT_USER="${MONGO_MGMT_USER}"
+MGMT_PASSWORD=""
 
-if [[ "${AUTH_STATUS}" == "enabled" &&
-      "${EXISTING_LOCAL_URL}" == "true" &&
-      -n "${EXISTING_DB_PASSWORD}" ]]; then
+if [[ "${AUTH_STATUS}" == "disabled" ]]; then
 
-    section "Validating existing MongoDB credentials"
+    section "Configuring MongoDB management user"
 
-    CURRENT_AUTH_DB="${EXISTING_AUTH_SOURCE:-${MONGO_DATABASE}}"
-    MONGO_AUTH_DB="${CURRENT_AUTH_DB}"
+    echo
+    echo "MongoDB authorization is currently disabled."
+    echo "A dedicated management user is required before authorization is enabled."
+    echo
+    echo "Management username:"
+    echo "  ${MONGO_MGMT_USER}"
+    echo
 
-    if MONGO_CURRENT_USER="${EXISTING_DB_USER}" \
-        MONGO_CURRENT_PASSWORD="${EXISTING_DB_PASSWORD}" \
-        mongosh \
-            --quiet \
-            --host "${MONGO_HOST}" \
-            --port "${MONGO_PORT}" \
-            "${CURRENT_AUTH_DB}" \
-            --eval '
-                quit(
-                    db.auth(
-                        process.env.MONGO_CURRENT_USER,
-                        process.env.MONGO_CURRENT_PASSWORD
-                    ) ? 0 : 1
-                );
-            ' >/dev/null 2>&1; then
-        EXISTING_CREDENTIALS_VALID="true"
-        ok "Existing MongoDB credentials are valid"
-    else
-        warn "Existing DATABASE_URL password could not authenticate."
+    MGMT_PASSWORD="$(read_password "Enter management-user password")"
+
+    create_management_user_without_auth "${MGMT_PASSWORD}" ||
+        die "Failed to create MongoDB management user."
+
+    ok "MongoDB management user created/updated"
+
+else
+
+    section "Authenticating MongoDB management user"
+
+    echo
+    echo "MongoDB authorization is already enabled."
+    echo
+    echo "Management username:"
+    echo "  ${MONGO_MGMT_USER}"
+    echo
+
+    read -r -p "Management username [${MONGO_MGMT_USER}]: " ENTERED_MGMT_USER
+    MGMT_USER="${ENTERED_MGMT_USER:-${MONGO_MGMT_USER}}"
+
+    MGMT_PASSWORD="$(read_password "Enter management-user password")"
+
+    if ! validate_management_credentials "${MGMT_USER}" "${MGMT_PASSWORD}"; then
+        die "Management credentials are invalid or the user lacks userAdminAnyDatabase."
     fi
+
+    ok "MongoDB management credentials are valid"
+fi
+
+###############################################################################
+# EXISTING APPLICATION PASSWORD
+###############################################################################
+
+section "Checking HomeShoppie application credentials"
+
+EXISTING_DATABASE_URL="$(
+    node <<'NODE'
+const fs = require("fs");
+
+const file = "/etc/homeshoppie/.env.production";
+const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
+
+for (const raw of lines) {
+    const line = raw.trim();
+
+    if (!line || line.startsWith("#")) continue;
+
+    const match = line.match(/^DATABASE_URL\s*=\s*(.*)$/);
+
+    if (!match) continue;
+
+    let value = match[1].trim();
+
+    if (
+        value.length >= 2 &&
+        (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        )
+    ) {
+        value = value.slice(1, -1);
+    }
+
+    process.stdout.write(value);
+    process.exit(0);
+}
+NODE
+)"
+
+EXISTING_APP_PASSWORD=""
+EXISTING_APP_VALID="false"
+
+if [[ -n "${EXISTING_DATABASE_URL}" ]]; then
+    PARSED_APP="$(
+        DATABASE_URL="${EXISTING_DATABASE_URL}" \
+        EXPECTED_USER="${MONGO_APP_USER}" \
+        EXPECTED_DB="${MONGO_DATABASE}" \
+        node <<'NODE'
+try {
+    const url = new URL(process.env.DATABASE_URL);
+
+    if (url.protocol !== "mongodb:") process.exit(0);
+
+    const host = url.hostname;
+    const port = url.port || "27017";
+    const db = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+    const user = decodeURIComponent(url.username || "");
+    const password = decodeURIComponent(url.password || "");
+    const params = new URLSearchParams(url.search);
+    const authSource = params.get("authSource") || db || "admin";
+
+    const localHost =
+        host === "127.0.0.1" ||
+        host === "localhost";
+
+    if (
+        localHost &&
+        port === "27017" &&
+        db === process.env.EXPECTED_DB &&
+        user === process.env.EXPECTED_USER
+    ) {
+        process.stdout.write(
+            ["LOCAL", user, password, authSource].join("\t")
+        );
+    }
+} catch {
+    process.exit(0);
+}
+NODE
+    )"
+
+    if [[ "${PARSED_APP}" == LOCAL$'\t'* ]]; then
+        IFS=$'\t' read -r _ EXISTING_APP_USER EXISTING_APP_PASSWORD EXISTING_APP_AUTH_SOURCE <<< "${PARSED_APP}"
+
+        if [[ -n "${EXISTING_APP_PASSWORD}" ]]; then
+            if validate_app_credentials "${EXISTING_APP_PASSWORD}"; then
+                EXISTING_APP_VALID="true"
+                ok "Existing HomeShoppie application credentials are valid"
+            else
+                warn "Existing DATABASE_URL password is not valid."
+            fi
+        fi
+    else
+        warn "Existing DATABASE_URL is not the expected local HomeShoppie MongoDB URL."
+        warn "It will be replaced."
+    fi
+else
+    warn "No DATABASE_URL found in ${ENV_FILE}."
 fi
 
 ###############################################################################
 # PASSWORD SELECTION
 ###############################################################################
 
-MONGO_PASSWORD=""
+MONGO_APP_PASSWORD=""
 PASSWORD_SOURCE=""
 
-if [[ "${EXISTING_CREDENTIALS_VALID}" == "true" ]]; then
-    section "MongoDB password"
-    echo
+section "HomeShoppie MongoDB application password"
+
+echo
+echo "Application user:"
+echo "  ${MONGO_APP_USER}"
+echo "Database:"
+echo "  ${MONGO_DATABASE}"
+echo
+
+if [[ "${EXISTING_APP_VALID}" == "true" ]]; then
+
     echo "Choose:"
     echo "  1) Keep existing password"
     echo "  2) Generate a new random password"
@@ -541,21 +743,21 @@ if [[ "${EXISTING_CREDENTIALS_VALID}" == "true" ]]; then
 
         case "${choice}" in
             1)
-                MONGO_PASSWORD="${EXISTING_DB_PASSWORD}"
+                MONGO_APP_PASSWORD="${EXISTING_APP_PASSWORD}"
                 PASSWORD_SOURCE="existing"
-                ok "Existing MongoDB password will be kept"
+                ok "Existing application password will be kept"
                 break
                 ;;
             2)
-                MONGO_PASSWORD="$(generate_password)"
+                MONGO_APP_PASSWORD="$(generate_password)"
                 PASSWORD_SOURCE="generated"
-                ok "New random MongoDB password generated"
+                ok "New random application password generated"
                 break
                 ;;
             3)
-                MONGO_PASSWORD="$(read_manual_password)"
+                MONGO_APP_PASSWORD="$(read_password "Enter new application password")"
                 PASSWORD_SOURCE="manual"
-                ok "Manual MongoDB password accepted"
+                ok "Manual application password accepted"
                 break
                 ;;
             *)
@@ -564,77 +766,13 @@ if [[ "${EXISTING_CREDENTIALS_VALID}" == "true" ]]; then
         esac
     done
 
-elif [[ "${AUTH_STATUS}" == "enabled" ]]; then
-    section "MongoDB password recovery"
-    echo
-    echo "MongoDB authentication is enabled, but the existing"
-    echo "application credentials could not authenticate."
-    echo
-    echo "Choose:"
-    echo "  1) Generate a new password and reset the user"
-    echo "  2) Enter a new password and reset the user"
-    echo "  3) Enter the current password"
-    echo "  4) Abort"
-    echo
-
-    while true; do
-        read -r -p "Choose [1-4]: " choice
-
-        case "${choice}" in
-            1)
-                MONGO_PASSWORD="$(generate_password)"
-                PASSWORD_SOURCE="generated-reset"
-                break
-                ;;
-            2)
-                MONGO_PASSWORD="$(read_manual_password)"
-                PASSWORD_SOURCE="manual-reset"
-                break
-                ;;
-            3)
-                read -r -s -p "Enter current MongoDB password: " CURRENT_PASSWORD
-                echo
-
-                if MONGO_CURRENT_USER="${MONGO_USER}" \
-                    MONGO_CURRENT_PASSWORD="${CURRENT_PASSWORD}" \
-                    mongosh \
-                        --quiet \
-                        --host "${MONGO_HOST}" \
-                        --port "${MONGO_PORT}" \
-                        "${CURRENT_AUTH_DB}" \
-                        --eval '
-                            quit(
-                                db.auth(
-                                    process.env.MONGO_CURRENT_USER,
-                                    process.env.MONGO_CURRENT_PASSWORD
-                                ) ? 0 : 1
-                            );
-                        ' >/dev/null 2>&1; then
-                    MONGO_PASSWORD="${CURRENT_PASSWORD}"
-                    PASSWORD_SOURCE="existing-entered"
-                    EXISTING_CREDENTIALS_VALID="true"
-                    EXISTING_DB_USER="${MONGO_USER}"
-                    EXISTING_DB_PASSWORD="${CURRENT_PASSWORD}"
-                    ok "Current MongoDB password is valid"
-                    break
-                else
-                    warn "Current password is not valid."
-                fi
-                ;;
-            4)
-                die "Setup cancelled."
-                ;;
-            *)
-                warn "Choose 1, 2, 3, or 4."
-                ;;
-        esac
-    done
 else
-    section "MongoDB password"
+
+    echo "Existing application credentials could not be verified."
     echo
     echo "Choose:"
     echo "  1) Generate a random password"
-    echo "  2) Enter a password manually"
+    echo "  2) Enter a new password manually"
     echo
 
     while true; do
@@ -642,13 +780,15 @@ else
 
         case "${choice}" in
             1)
-                MONGO_PASSWORD="$(generate_password)"
+                MONGO_APP_PASSWORD="$(generate_password)"
                 PASSWORD_SOURCE="generated"
+                ok "New random application password generated"
                 break
                 ;;
             2)
-                MONGO_PASSWORD="$(read_manual_password)"
+                MONGO_APP_PASSWORD="$(read_password "Enter application password")"
                 PASSWORD_SOURCE="manual"
+                ok "Manual application password accepted"
                 break
                 ;;
             *)
@@ -658,312 +798,71 @@ else
     done
 fi
 
-[[ -n "${MONGO_PASSWORD}" ]] || die "MongoDB password is empty."
-(( ${#MONGO_PASSWORD} >= MIN_PASSWORD_LENGTH )) || die "MongoDB password is too short."
+[[ -n "${MONGO_APP_PASSWORD}" ]] ||
+    die "Application password is empty."
+
+(( ${#MONGO_APP_PASSWORD} >= MIN_PASSWORD_LENGTH )) ||
+    die "Application password is too short."
 
 ###############################################################################
-# USER HELPERS
+# CONFIGURE APPLICATION USER USING MANAGEMENT USER
 ###############################################################################
 
-user_exists_without_auth_in_db() {
-    local database="$1"
+section "Configuring MongoDB application user"
 
-    MONGO_TARGET_USER="${MONGO_USER}" \
-    mongosh \
-        --quiet \
-        --host "${MONGO_HOST}" \
-        --port "${MONGO_PORT}" \
-        "${database}" \
-        --eval '
-            const result = db.getUser(process.env.MONGO_TARGET_USER);
-            quit(result ? 0 : 1);
-        ' >/dev/null 2>&1
-}
-
-find_user_database_without_auth() {
-    if user_exists_without_auth_in_db "${MONGO_DATABASE}"; then
-        echo "${MONGO_DATABASE}"
-        return 0
-    fi
-
-    if user_exists_without_auth_in_db "admin"; then
-        echo "admin"
-        return 0
-    fi
-
-    return 1
-}
-
-change_user_password_authenticated() {
-    local auth_db="$1"
-
-    MONGO_CURRENT_USER="${EXISTING_DB_USER:-${MONGO_USER}}" \
-    MONGO_CURRENT_PASSWORD="${EXISTING_DB_PASSWORD}" \
-    MONGO_NEW_PASSWORD="${MONGO_PASSWORD}" \
-    MONGO_AUTH_DB="${auth_db}" \
-    mongosh \
-        --quiet \
-        --host "${MONGO_HOST}" \
-        --port "${MONGO_PORT}" \
-        "${auth_db}" \
-        --eval '
-            const username = process.env.MONGO_CURRENT_USER;
-            const currentPassword = process.env.MONGO_CURRENT_PASSWORD;
-            const newPassword = process.env.MONGO_NEW_PASSWORD;
-            const authDbName = process.env.MONGO_AUTH_DB;
-
-            if (!db.auth(username, currentPassword)) {
-                throw new Error("Current MongoDB authentication failed.");
-            }
-
-            const authDb = db.getSiblingDB(authDbName);
-            const userInfo = authDb.getUser(username);
-
-            if (!userInfo) {
-                throw new Error(
-                    `MongoDB user "${username}" was not found in "${authDbName}".`
-                );
-            }
-
-            authDb.updateUser(username, {
-                pwd: newPassword
-            });
-
-            print("PASSWORD_UPDATED");
-        ' >/dev/null
-}
-
-change_user_password_without_auth() {
-    local auth_db="$1"
-
-    MONGO_NEW_PASSWORD="${MONGO_PASSWORD}" \
-    MONGO_TARGET_USER="${MONGO_USER}" \
-    mongosh \
-        --quiet \
-        --host "${MONGO_HOST}" \
-        --port "${MONGO_PORT}" \
-        "${auth_db}" \
-        --eval '
-            const username = process.env.MONGO_TARGET_USER;
-            const newPassword = process.env.MONGO_NEW_PASSWORD;
-            const userInfo = db.getUser(username);
-
-            if (!userInfo) {
-                throw new Error(`MongoDB user "${username}" was not found.`);
-            }
-
-            db.updateUser(username, {
-                pwd: newPassword
-            });
-
-            print("PASSWORD_UPDATED");
-        ' >/dev/null
-}
-
-create_user_without_auth() {
-    MONGO_NEW_PASSWORD="${MONGO_PASSWORD}" \
-    MONGO_TARGET_USER="${MONGO_USER}" \
-    mongosh \
-        --quiet \
-        --host "${MONGO_HOST}" \
-        --port "${MONGO_PORT}" \
-        "${MONGO_DATABASE}" \
-        --eval '
-            const username = process.env.MONGO_TARGET_USER;
-            const password = process.env.MONGO_NEW_PASSWORD;
-
-            db.createUser({
-                user: username,
-                pwd: password,
-                roles: [
-                    {
-                        role: "readWrite",
-                        db: "homeshoppie"
-                    }
-                ]
-            });
-
-            print("USER_CREATED");
-        ' >/dev/null
-}
-
-###############################################################################
-# RECOVERY STATE / CLEANUP
-###############################################################################
-
-RECOVERY_MODE="false"
-RECOVERY_CONFIG_CHANGED="false"
-
-cleanup() {
-    local exit_code=$?
-
-    if [[ "${RECOVERY_MODE}" == "true" &&
-          "${RECOVERY_CONFIG_CHANGED}" == "true" ]]; then
-
-        error "Setup interrupted during MongoDB recovery."
-
-        set_mongo_authorization "enabled" >/dev/null 2>&1 || true
-        systemctl restart "${MONGO_SERVICE}" >/dev/null 2>&1 || true
-
-        if systemctl is-active --quiet "${MONGO_SERVICE}"; then
-            error "MongoDB authorization was restored."
-        else
-            error "CRITICAL: MongoDB could not be restarted."
-        fi
-    fi
-
-    exit "${exit_code}"
-}
-
-trap cleanup EXIT
-
-###############################################################################
-# CONFIGURE USER
-###############################################################################
-
-if [[ "${AUTH_STATUS}" == "enabled" ]]; then
-    section "Configuring MongoDB user"
-
-    if [[ "${EXISTING_CREDENTIALS_VALID}" == "true" ]]; then
-        # Option 1: keep the currently authenticated credentials.
-        if [[ "${PASSWORD_SOURCE}" == "existing" ||
-              "${PASSWORD_SOURCE}" == "existing-entered" ]]; then
-            MONGO_AUTH_DB="${CURRENT_AUTH_DB}"
-            ok "Existing MongoDB password retained"
-        else
-            # Options 2 and 3: change the password in the database where the
-            # authenticated user actually exists.
-            log "Changing MongoDB application password..."
-
-            MONGO_AUTH_DB="${CURRENT_AUTH_DB}"
-            change_user_password_authenticated "${MONGO_AUTH_DB}" || \
-                die "MongoDB password change failed in authSource '${MONGO_AUTH_DB}'."
-
-            ok "MongoDB password changed"
-        fi
-    else
-        #######################################################################
-        # Existing auth-enabled MongoDB user cannot be authenticated.
-        # Temporarily disable authorization, locate the application user,
-        # reset/create it, then enable authorization again.
-        #######################################################################
-
-        section "Recovering MongoDB application user"
-        RECOVERY_MODE="true"
-
-        log "Temporarily disabling MongoDB authorization..."
-        set_mongo_authorization "disabled"
-        RECOVERY_CONFIG_CHANGED="true"
-
-        systemctl restart "${MONGO_SERVICE}"
-        sleep 3
-
-        systemctl is-active --quiet "${MONGO_SERVICE}" || \
-            die "MongoDB failed to start in recovery mode."
-
-        wait_for_mongo false || \
-            die "MongoDB did not become ready in recovery mode."
-
-        ok "MongoDB recovery mode active"
-
-        FOUND_USER_DB=""
-        if FOUND_USER_DB="$(find_user_database_without_auth)"; then
-            log "Existing MongoDB user found in database '${FOUND_USER_DB}'. Resetting password..."
-            change_user_password_without_auth "${FOUND_USER_DB}"
-            MONGO_AUTH_DB="${FOUND_USER_DB}"
-            ok "MongoDB application password reset"
-        else
-            log "MongoDB user does not exist. Creating it in '${MONGO_DATABASE}'..."
-            create_user_without_auth
-            MONGO_AUTH_DB="${MONGO_DATABASE}"
-            ok "MongoDB application user created"
-        fi
-
-        log "Re-enabling MongoDB authorization..."
-        set_mongo_authorization "enabled"
-        systemctl restart "${MONGO_SERVICE}"
-        sleep 3
-
-        systemctl is-active --quiet "${MONGO_SERVICE}" || \
-            die "MongoDB failed to restart with authorization enabled."
-
-        wait_for_mongo true || \
-            die "New MongoDB credentials could not authenticate."
-
-        RECOVERY_CONFIG_CHANGED="false"
-        RECOVERY_MODE="false"
-
-        ok "MongoDB authorization enabled"
-        ok "New MongoDB credentials verified"
-    fi
+if [[ "${PASSWORD_SOURCE}" == "existing" ]]; then
+    ok "Keeping existing application password"
 else
-    section "Configuring MongoDB user"
+    log "Changing HomeShoppie application password using management user..."
 
-    if user_exists_without_auth_in_db "${MONGO_DATABASE}"; then
-        log "Existing MongoDB user found in '${MONGO_DATABASE}'. Updating password..."
-        change_user_password_without_auth "${MONGO_DATABASE}"
-        MONGO_AUTH_DB="${MONGO_DATABASE}"
-        ok "MongoDB application password updated"
-    elif user_exists_without_auth_in_db "admin"; then
-        log "Existing MongoDB user found in 'admin'. Updating password..."
-        change_user_password_without_auth "admin"
-        MONGO_AUTH_DB="admin"
-        ok "MongoDB application password updated"
-    else
-        log "Creating MongoDB application user in '${MONGO_DATABASE}'..."
-        create_user_without_auth
-        MONGO_AUTH_DB="${MONGO_DATABASE}"
-        ok "MongoDB application user created"
-    fi
+    create_or_update_app_user \
+        "${MGMT_USER}" \
+        "${MGMT_PASSWORD}" \
+        "${MONGO_APP_PASSWORD}" ||
+        die "MongoDB application password change failed."
 
-    log "Enabling MongoDB authorization..."
-    set_mongo_authorization "enabled"
-    systemctl restart "${MONGO_SERVICE}"
-    sleep 3
-
-    systemctl is-active --quiet "${MONGO_SERVICE}" || \
-        die "MongoDB failed to restart with authorization enabled."
-
-    wait_for_mongo true || \
-        die "MongoDB authentication failed after enabling authorization."
-
-    ok "MongoDB authorization enabled"
+    ok "MongoDB application password changed"
 fi
 
 ###############################################################################
-# FINAL AUTHENTICATED TEST
+# ENABLE AUTHORIZATION
 ###############################################################################
 
-section "Testing MongoDB authentication"
+if [[ "${AUTH_STATUS}" == "disabled" ]]; then
 
-MONGO_TEST_RESULT="$(
-    MONGO_TEST_USER="${MONGO_USER}" \
-    MONGO_TEST_PASSWORD="${MONGO_PASSWORD}" \
-    MONGO_TEST_AUTH_DB="${MONGO_AUTH_DB}" \
-    mongosh \
-        --quiet \
-        --host "${MONGO_HOST}" \
-        --port "${MONGO_PORT}" \
-        "${MONGO_AUTH_DB}" \
-        --eval '
-            if (!db.auth(
-                process.env.MONGO_TEST_USER,
-                process.env.MONGO_TEST_PASSWORD
-            )) {
-                quit(1);
-            }
+    section "Enabling MongoDB authorization"
 
-            const result = db.runCommand({ ping: 1 });
-            print(result.ok === 1 ? "PING_OK" : "PING_FAILED");
-        ' 2>/dev/null
-)"
+    set_mongo_authorization "enabled" ||
+        die "Failed to enable MongoDB authorization."
 
-[[ "${MONGO_TEST_RESULT}" == *"PING_OK"* ]] || \
-    die "MongoDB authentication/ping failed."
+    systemctl restart "${MONGO_SERVICE}"
 
-ok "MongoDB authentication successful"
+    sleep 3
+
+    systemctl is-active --quiet "${MONGO_SERVICE}" ||
+        die "MongoDB failed to restart after enabling authorization."
+
+    wait_for_mongo ||
+        die "MongoDB did not become ready after enabling authorization."
+
+    ok "MongoDB authorization enabled"
+
+else
+    ok "MongoDB authorization is already enabled"
+fi
+
+###############################################################################
+# VERIFY APPLICATION USER
+###############################################################################
+
+section "Testing MongoDB application authentication"
+
+if ! validate_app_credentials "${MONGO_APP_PASSWORD}"; then
+    die "HomeShoppie application user authentication failed."
+fi
+
+ok "HomeShoppie application authentication successful"
 ok "MongoDB ping successful"
-ok "MongoDB authSource: ${MONGO_AUTH_DB}"
 
 ###############################################################################
 # BUILD DATABASE_URL
@@ -972,18 +871,19 @@ ok "MongoDB authSource: ${MONGO_AUTH_DB}"
 section "Updating HomeShoppie DATABASE_URL"
 
 ENCODED_CREDENTIALS="$(
-    MONGO_USER_VALUE="${MONGO_USER}" \
-    MONGO_PASSWORD_VALUE="${MONGO_PASSWORD}" \
+    MONGO_USER_VALUE="${MONGO_APP_USER}" \
+    MONGO_PASSWORD_VALUE="${MONGO_APP_PASSWORD}" \
     node <<'NODE'
 const user = encodeURIComponent(process.env.MONGO_USER_VALUE);
 const password = encodeURIComponent(process.env.MONGO_PASSWORD_VALUE);
+
 process.stdout.write(`${user}\t${password}`);
 NODE
 )"
 
 IFS=$'\t' read -r ENCODED_USER ENCODED_PASSWORD <<< "${ENCODED_CREDENTIALS}"
 
-NEW_DATABASE_URL="mongodb://${ENCODED_USER}:${ENCODED_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}?authSource=$(node -p 'encodeURIComponent(process.argv[1])' "${MONGO_AUTH_DB}")"
+NEW_DATABASE_URL="mongodb://${ENCODED_USER}:${ENCODED_PASSWORD}@${MONGO_HOST}:${MONGO_PORT}/${MONGO_DATABASE}?authSource=${MONGO_APP_AUTH_DB}"
 
 ###############################################################################
 # ATOMIC ENV UPDATE
@@ -992,7 +892,9 @@ NEW_DATABASE_URL="mongodb://${ENCODED_USER}:${ENCODED_PASSWORD}@${MONGO_HOST}:${
 TMP_ENV="$(mktemp)"
 
 awk -v new_url="${NEW_DATABASE_URL}" '
-    BEGIN { found=0 }
+    BEGIN {
+        found=0
+    }
 
     /^[[:space:]]*DATABASE_URL[[:space:]]*=/ {
         if (!found) {
@@ -1002,7 +904,9 @@ awk -v new_url="${NEW_DATABASE_URL}" '
         next
     }
 
-    { print }
+    {
+        print
+    }
 
     END {
         if (!found) {
@@ -1027,21 +931,27 @@ section "Verifying environment"
 FINAL_DATABASE_URL="$(
     node <<'NODE'
 const fs = require("fs");
+
 const file = "/etc/homeshoppie/.env.production";
 const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
 
-for (const line of lines) {
-    const trimmed = line.trim();
+for (const raw of lines) {
+    const trimmed = raw.trim();
+
     if (!trimmed || trimmed.startsWith("#")) continue;
 
     const match = trimmed.match(/^DATABASE_URL\s*=\s*(.*)$/);
+
     if (!match) continue;
 
     let value = match[1].trim();
+
     if (
         value.length >= 2 &&
-        ((value.startsWith('"') && value.endsWith('"')) ||
-         (value.startsWith("'") && value.endsWith("'")))
+        (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        )
     ) {
         value = value.slice(1, -1);
     }
@@ -1052,21 +962,23 @@ for (const line of lines) {
 NODE
 )"
 
-[[ -n "${FINAL_DATABASE_URL}" ]] || die "DATABASE_URL could not be verified."
-[[ "${FINAL_DATABASE_URL}" == mongodb://* ]] || die "DATABASE_URL is not a mongodb:// URL."
+[[ -n "${FINAL_DATABASE_URL}" ]] ||
+    die "DATABASE_URL could not be verified."
 
-grep -Eq '(^|[?&])authSource=' <<< "${FINAL_DATABASE_URL}" || \
-    die "DATABASE_URL does not contain authSource."
+[[ "${FINAL_DATABASE_URL}" == mongodb://* ]] ||
+    die "DATABASE_URL is not a mongodb:// URL."
 
 chmod 600 "${ENV_FILE}"
 chown "${APP_USER}:${APP_USER}" "${ENV_FILE}"
-[[ "$(stat -c '%a' "${ENV_FILE}")" == "600" ]] || die "Environment file permissions are not 600."
+
+[[ "$(stat -c '%a' "${ENV_FILE}")" == "600" ]] ||
+    die "Environment file permissions are not 600."
 
 ok "DATABASE_URL verified"
 ok "Environment file secured"
 
 ###############################################################################
-# UPDATE PM2 ENVIRONMENT
+# PM2
 ###############################################################################
 
 section "Updating HomeShoppie PM2 environment"
@@ -1074,13 +986,13 @@ section "Updating HomeShoppie PM2 environment"
 if ! command_exists pm2; then
     warn "PM2 is not installed. Skipping PM2 update."
 else
-    # PM2 belongs to ec2-user. Running pm2 as root would operate on a
-    # different PM2 daemon and would NOT update the application's environment.
-    if sudo -u "${APP_USER}" -H bash -s -- \
+
+    sudo -u "${APP_USER}" -H bash -s -- \
         "${ENV_FILE}" \
         "${APP_NAME}" \
         "${APP_DIR}" \
         "${APP_PORT}" <<'PM2_SCRIPT'
+
 set -Eeuo pipefail
 
 ENV_FILE="$1"
@@ -1088,36 +1000,40 @@ APP_NAME="$2"
 APP_DIR="$3"
 APP_PORT="$4"
 
-[[ -f "${ENV_FILE}" ]] || {
-    echo "[ERROR] Environment file not found: ${ENV_FILE}" >&2
-    exit 1
-}
+[[ -f "${ENV_FILE}" ]] ||
+    {
+        echo "[ERROR] Environment file not found: ${ENV_FILE}" >&2
+        exit 1
+    }
 
-command -v node >/dev/null 2>&1 || {
-    echo "[ERROR] Node.js is not available." >&2
-    exit 1
-}
+command -v node >/dev/null 2>&1 ||
+    {
+        echo "[ERROR] Node.js is not available." >&2
+        exit 1
+    }
 
-command -v pm2 >/dev/null 2>&1 || {
-    echo "[ERROR] PM2 is not available." >&2
-    exit 1
-}
+command -v pm2 >/dev/null 2>&1 ||
+    {
+        echo "[ERROR] PM2 is not available." >&2
+        exit 1
+    }
 
 echo "[INFO] Loading production environment safely..."
 
-# Do not source the env file directly. Parse dotenv values with Node and emit
-# shell-safe exports, allowing URLs and special characters in values.
 eval "$(
     ENV_FILE="${ENV_FILE}" node <<'NODE'
 const fs = require("fs");
+
 const file = process.env.ENV_FILE;
 const content = fs.readFileSync(file, "utf8");
 
 for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim();
+
     if (!line || line.startsWith("#")) continue;
 
     const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+
     if (!match) continue;
 
     const key = match[1];
@@ -1125,13 +1041,17 @@ for (const rawLine of content.split(/\r?\n/)) {
 
     if (
         value.length >= 2 &&
-        ((value.startsWith('"') && value.endsWith('"')) ||
-         (value.startsWith("'") && value.endsWith("'")))
+        (
+            (value.startsWith('"') && value.endsWith('"')) ||
+            (value.startsWith("'") && value.endsWith("'"))
+        )
     ) {
         value = value.slice(1, -1);
     }
 
-    process.stdout.write(`export ${key}=${JSON.stringify(value)}\n`);
+    process.stdout.write(
+        `export ${key}=${JSON.stringify(value)}\n`
+    );
 }
 NODE
 )"
@@ -1142,10 +1062,15 @@ export PORT="${APP_PORT}"
 cd "${APP_DIR}"
 
 if pm2 describe "${APP_NAME}" >/dev/null 2>&1; then
+
     echo "[INFO] Restarting ${APP_NAME} with updated environment..."
+
     pm2 restart "${APP_NAME}" --update-env
+
 else
+
     echo "[INFO] ${APP_NAME} is not registered. Starting it..."
+
     pm2 start npm \
         --name "${APP_NAME}" \
         --cwd "${APP_DIR}" \
@@ -1153,15 +1078,19 @@ else
 fi
 
 sleep 2
+
 pm2 save
 
 echo "[OK] PM2 environment updated and saved"
+
 PM2_SCRIPT
-    then
-        ok "PM2 environment updated successfully"
-    else
-        die "Failed to update PM2 environment."
-    fi
+
+then
+    ok "PM2 environment updated successfully"
+else
+    die "Failed to update PM2 environment."
+fi
+
 fi
 
 ###############################################################################
@@ -1170,20 +1099,27 @@ fi
 
 section "Verifying PM2"
 
-if command_exists pm2 && \
+if command_exists pm2 &&
    sudo -u "${APP_USER}" -H pm2 describe "${APP_NAME}" >/dev/null 2>&1; then
 
     PM2_STATUS="$(
         sudo -u "${APP_USER}" -H pm2 jlist 2>/dev/null |
         APP_NAME="${APP_NAME}" node <<'NODE'
-const fs = require("fs");
 let data = "";
+
 process.stdin.on("data", chunk => data += chunk);
+
 process.stdin.on("end", () => {
     try {
         const apps = JSON.parse(data);
-        const app = apps.find(item => item.name === process.env.APP_NAME);
-        process.stdout.write(app?.pm2_env?.status || "unknown");
+
+        const app = apps.find(
+            item => item.name === process.env.APP_NAME
+        );
+
+        process.stdout.write(
+            app?.pm2_env?.status || "unknown"
+        );
     } catch {
         process.stdout.write("unknown");
     }
@@ -1198,9 +1134,6 @@ NODE
         sudo -u "${APP_USER}" -H pm2 status || true
     fi
 
-    echo
-    echo "PM2 environment verification:"
-    echo "  DATABASE_URL is configured in the PM2 process."
 else
     warn "HomeShoppie is not registered in PM2."
 fi
@@ -1212,6 +1145,7 @@ fi
 section "Checking HomeShoppie application"
 
 if command_exists curl; then
+
     HEALTH_OK="false"
 
     for _ in {1..20}; do
@@ -1222,9 +1156,11 @@ if command_exists curl; then
             --max-time 5 \
             "http://127.0.0.1:${APP_PORT}" \
             >/dev/null 2>&1; then
+
             HEALTH_OK="true"
             break
         fi
+
         sleep 1
     done
 
@@ -1235,24 +1171,34 @@ if command_exists curl; then
         warn "Check:"
         warn "  sudo -u ${APP_USER} pm2 logs ${APP_NAME} --lines 50"
     fi
+
 else
     warn "curl is not installed; skipping application health check."
 fi
 
 ###############################################################################
-# SECURITY
+# SECURITY VERIFICATION
 ###############################################################################
 
 section "Security verification"
 
 FINAL_AUTH="$(get_auth_status)"
-[[ "${FINAL_AUTH}" == "enabled" ]] || die "MongoDB authorization is not enabled."
+
+[[ "${FINAL_AUTH}" == "enabled" ]] ||
+    die "MongoDB authorization is not enabled."
+
 ok "MongoDB authorization is enabled"
 
 if grep -Eq '^[[:space:]]*bindIp:[[:space:]]*127\.0\.0\.1[[:space:]]*$' "${MONGO_CONFIG}"; then
     ok "MongoDB is bound only to localhost"
 else
     warn "Could not verify bindIp automatically."
+fi
+
+if [[ "$(stat -c '%a' "${ENV_FILE}")" == "600" ]]; then
+    ok "Environment file permissions are 600"
+else
+    die "Environment file permissions are not 600."
 fi
 
 ###############################################################################
@@ -1264,7 +1210,9 @@ SAFE_DATABASE_URL="$(
     node <<'NODE'
 try {
     const url = new URL(process.env.DATABASE_URL);
+
     url.password = "********";
+
     process.stdout.write(url.toString());
 } catch {
     process.stdout.write("configured");
@@ -1273,15 +1221,16 @@ NODE
 )"
 
 section "MongoDB setup completed"
+
 echo
 echo "MongoDB:"
-echo "  Version       : ${MONGOD_VERSION}"
-echo "  Host          : ${MONGO_HOST}"
-echo "  Port          : ${MONGO_PORT}"
-echo "  Database      : ${MONGO_DATABASE}"
-echo "  User          : ${MONGO_USER}"
-echo "  Auth Source   : ${MONGO_AUTH_DB}"
-echo "  Authorization : enabled"
+echo "  Version            : ${MONGOD_VERSION}"
+echo "  Host               : ${MONGO_HOST}"
+echo "  Port               : ${MONGO_PORT}"
+echo "  Database           : ${MONGO_DATABASE}"
+echo "  Application user   : ${MONGO_APP_USER}"
+echo "  Management user    : ${MGMT_USER}"
+echo "  Authorization      : enabled"
 echo
 echo "Environment:"
 echo "  ${ENV_FILE}"
@@ -1290,9 +1239,9 @@ echo "DATABASE_URL:"
 echo "  ${SAFE_DATABASE_URL}"
 echo
 echo "PM2:"
-echo "  Application   : ${APP_NAME}"
-echo "  User          : ${APP_USER}"
-echo "  Port          : ${APP_PORT}"
+echo "  Application        : ${APP_NAME}"
+echo "  User               : ${APP_USER}"
+echo "  Port               : ${APP_PORT}"
 echo
 echo "Security:"
 echo "  MongoDB public access : NO"
@@ -1300,11 +1249,14 @@ echo "  MongoDB bind          : ${MONGO_HOST}"
 echo "  Env permissions       : 600"
 echo
 echo "Password:"
-echo "  Password value is NOT displayed."
-echo "  Source: ${PASSWORD_SOURCE}"
+echo "  Application password  : NOT displayed"
+echo "  Password source       : ${PASSWORD_SOURCE}"
+echo
+echo "Management user:"
+echo "  ${MGMT_USER}"
+echo "  Credentials are NOT stored in the application .env file."
 echo
 
 ok "HomeShoppie MongoDB setup completed successfully"
 
-trap - EXIT
 exit 0
