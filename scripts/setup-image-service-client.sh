@@ -19,14 +19,14 @@ set -Eeuo pipefail
 
 APP_NAME="${APP_NAME:-homeshoppie}"
 APP_DESCRIPTION="${APP_DESCRIPTION:-HomeShoppie e-commerce image service}"
-APP_DOMAIN="${APP_DOMAIN:-homeshoppie.in}"
+APP_DOMAIN="${APP_DOMAIN:-homeshoppie.com}"
 
 IMAGE_SERVICE_URL="${IMAGE_SERVICE_URL:-http://localhost:5000}"
 
 PLAN="${PLAN:-free}"
 
 # Your production frontend origin
-ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-https://homeshoppie.in}"
+ALLOWED_ORIGIN="${ALLOWED_ORIGIN:-https://homeshoppie.com}"
 
 # Where credentials will be stored
 CREDENTIALS_DIR="${CREDENTIALS_DIR:-$HOME/.homeshoppie}"
