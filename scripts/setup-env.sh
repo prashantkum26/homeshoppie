@@ -98,7 +98,10 @@ if [[ -f "$ENV_FILE" ]]; then
     echo "Current permissions: $CURRENT_PERMS"
     echo "Current owner      : $CURRENT_OWNER"
 
+    # --------------------------------------------------------
     # Fix ownership
+    # --------------------------------------------------------
+
     if [[ "$CURRENT_OWNER" != "${APP_USER}:${APP_USER}" ]]; then
 
         warn "Fixing environment file ownership..."
@@ -109,7 +112,10 @@ if [[ -f "$ENV_FILE" ]]; then
 
     fi
 
+    # --------------------------------------------------------
     # Fix permissions
+    # --------------------------------------------------------
+
     if [[ "$CURRENT_PERMS" != "600" ]]; then
 
         warn "Fixing environment file permissions..."
@@ -165,49 +171,83 @@ NODE_ENV=production
 PORT=3000
 
 # ============================================================
+# Application URLs
+# ============================================================
+
+NEXT_PUBLIC_URL="https://homeshoppie.com"
+NEXT_PUBLIC_APP_URL="https://homeshoppie.com"
+NEXTAUTH_URL="https://homeshoppie.com"
+NEXT_PUBLIC_BASE_URL="https://homeshoppie.com"
+NEXT_PUBLIC_IMAGE_SERVICE_URL="https://homeshoppie.com/api"
+
+# ============================================================
 # Database
 # ============================================================
 
 DATABASE_URL=""
 
 # ============================================================
-# Authentication
+# Email / SMTP
+# ============================================================
+
+EMAIL_HOST=""
+EMAIL_PORT=""
+EMAIL_USER=""
+EMAIL_PASS=""
+
+# ============================================================
+# JWT Authentication
+# ============================================================
+
+JWT_SECRET=""
+
+# ============================================================
+# Google OAuth
+# ============================================================
+
+GOOGLE_ID=""
+GOOGLE_SECRET=""
+
+# ============================================================
+# Image Service
+# ============================================================
+
+# Internal server-to-server image service URL
+IMAGE_SERVICE_BASE_URL="http://localhost:5000"
+
+# Image service authentication
+IMAGE_SERVICE_API_KEY=""
+IMAGE_SERVICE_API_SECRET=""
+
+# ============================================================
+# Razorpay Configuration
+# ============================================================
+
+# Current mode: test
+# Change to "live" for production payments when ready.
+RAZORPAY_KEY_ID=""
+RAZORPAY_KEY_SECRET=""
+RAZORPAY_WEBHOOK_SECRET=""
+RAZORPAY_MODE="test"
+
+# Safe to expose to browser
+NEXT_PUBLIC_RAZORPAY_KEY_ID=""
+
+# ============================================================
+# NextAuth
 # ============================================================
 
 NEXTAUTH_SECRET=""
 
 # ============================================================
-# Razorpay
+# Security Secrets
 # ============================================================
 
-RAZORPAY_KEY_ID=""
-RAZORPAY_KEY_SECRET=""
+CSRF_SECRET=""
+CRON_SECRET=""
 
 # ============================================================
-# Public Razorpay Key
-# Only use NEXT_PUBLIC_ for values safe to expose to browser.
-# ============================================================
-
-NEXT_PUBLIC_RAZORPAY_KEY_ID=""
-
-# ============================================================
-# Email / SMTP
-# ============================================================
-
-# SMTP_HOST=""
-# SMTP_PORT=""
-# SMTP_USER=""
-# SMTP_PASSWORD=""
-
-# ============================================================
-# Admin
-# ============================================================
-
-# ADMIN_EMAIL=""
-# ADMIN_PASSWORD=""
-
-# ============================================================
-# Add other server-side secrets below
+# Add additional server-side secrets below
 # ============================================================
 
 EOF
@@ -254,7 +294,71 @@ fi
 success "Environment file created securely."
 
 # ============================================================
-# 9. Final information
+# 9. Verify required variables exist
+# ============================================================
+
+log "Checking required environment variable definitions..."
+
+REQUIRED_VARS=(
+    "NEXT_PUBLIC_URL"
+    "NEXT_PUBLIC_APP_URL"
+    "NEXTAUTH_URL"
+    "NEXT_PUBLIC_BASE_URL"
+    "NEXT_PUBLIC_IMAGE_SERVICE_URL"
+
+    "DATABASE_URL"
+
+    "EMAIL_HOST"
+    "EMAIL_PORT"
+    "EMAIL_USER"
+    "EMAIL_PASS"
+
+    "JWT_SECRET"
+
+    "GOOGLE_ID"
+    "GOOGLE_SECRET"
+
+    "IMAGE_SERVICE_BASE_URL"
+    "IMAGE_SERVICE_API_KEY"
+    "IMAGE_SERVICE_API_SECRET"
+
+    "RAZORPAY_KEY_ID"
+    "RAZORPAY_KEY_SECRET"
+    "RAZORPAY_WEBHOOK_SECRET"
+    "RAZORPAY_MODE"
+    "NEXT_PUBLIC_RAZORPAY_KEY_ID"
+
+    "NEXTAUTH_SECRET"
+    "CSRF_SECRET"
+    "CRON_SECRET"
+)
+
+MISSING_VARS=()
+
+for VAR in "${REQUIRED_VARS[@]}"; do
+
+    if ! grep -qE "^${VAR}=" "$ENV_FILE"; then
+        MISSING_VARS+=("$VAR")
+    fi
+
+done
+
+if [[ "${#MISSING_VARS[@]}" -gt 0 ]]; then
+
+    error "Missing environment variable definitions:"
+
+    for VAR in "${MISSING_VARS[@]}"; do
+        echo "  - $VAR"
+    done
+
+    exit 1
+
+fi
+
+success "All required environment variables are defined."
+
+# ============================================================
+# 10. Final information
 # ============================================================
 
 echo
@@ -270,6 +374,28 @@ echo "Permissions : $PERMISSIONS"
 echo "Owner       : $OWNER"
 echo
 echo "============================================================"
+echo " Application URLs"
+echo "============================================================"
+echo
+echo "NEXT_PUBLIC_URL               = https://homeshoppie.com"
+echo "NEXT_PUBLIC_APP_URL           = https://homeshoppie.com"
+echo "NEXTAUTH_URL                  = https://homeshoppie.com"
+echo "NEXT_PUBLIC_BASE_URL          = https://homeshoppie.com"
+echo "NEXT_PUBLIC_IMAGE_SERVICE_URL = https://homeshoppie.com/api"
+echo
+echo "============================================================"
+echo " Image Service"
+echo "============================================================"
+echo
+echo "IMAGE_SERVICE_BASE_URL = http://localhost:5000"
+echo
+echo "============================================================"
+echo " Razorpay"
+echo "============================================================"
+echo
+echo "RAZORPAY_MODE = test"
+echo
+echo "============================================================"
 echo
 echo "Next steps:"
 echo
@@ -283,7 +409,11 @@ echo "3. Verify permissions:"
 echo
 echo "   sudo stat -c '%a %U:%G %n' $ENV_FILE"
 echo
-echo "4. Run deployment:"
+echo "4. Verify variables without displaying secret values:"
+echo
+echo "   sudo grep -E '^[A-Z0-9_]+=' $ENV_FILE | cut -d= -f1"
+echo
+echo "5. Run deployment:"
 echo
 echo "   ./deploy.sh"
 echo
