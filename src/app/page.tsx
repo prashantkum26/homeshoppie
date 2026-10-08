@@ -3,7 +3,11 @@ import CategoryGrid from '@/components/CategoryGrid'
 import FeaturedProducts from '@/components/FeaturedProducts'
 import WhyChooseUs from '@/components/WhyChooseUs'
 import Testimonials from '@/components/Testimonials'
-
+import { JsonLd } from '@/components/seo/JsonLd'
+import {
+  organizationSchema,
+  websiteSchema,
+} from '@/lib/seo/schemas'
 export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
@@ -54,12 +58,16 @@ export default async function HomePage() {
   }
 
   return (
-    <div /*className="space-y-16"*/>
-      <HeroSection heroSlides={sliderCategories} />
-      <CategoryGrid />
-      <FeaturedProducts featuredProducts={products} />
-      <WhyChooseUs />
-      <Testimonials />
-    </div>
+    <>
+      <JsonLd data={organizationSchema()} />
+      <JsonLd data={websiteSchema()} />
+      <div /*className="space-y-16"*/>
+        <HeroSection heroSlides={sliderCategories} />
+        <CategoryGrid />
+        <FeaturedProducts featuredProducts={products} />
+        <WhyChooseUs />
+        <Testimonials />
+      </div>
+    </>
   )
 }
