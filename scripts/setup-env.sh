@@ -174,6 +174,7 @@ EMAIL_HOST
 EMAIL_PORT
 EMAIL_USER
 EMAIL_PASS
+EMAIL_SECURE
 JWT_SECRET
 GOOGLE_ID
 GOOGLE_SECRET
@@ -464,6 +465,8 @@ configure_email() {
     ENV_VALUES[EMAIL_PORT]="$REPLY"
     prompt_value "EMAIL_USER" "${ENV_VALUES[EMAIL_USER]-}"
     ENV_VALUES[EMAIL_USER]="$REPLY"
+    prompt_value "EMAIL_SECURE" "${ENV_VALUES[EMAIL_SECURE]-}"
+    ENV_VALUES[EMAIL_SECURE]="$REPLY"
     prompt_secret_value "EMAIL_PASS" "${ENV_VALUES[EMAIL_PASS]-}"
     ENV_VALUES[EMAIL_PASS]="$REPLY"
 }
@@ -751,6 +754,7 @@ show_environment_status() {
     status_line EMAIL_HOST
     status_line EMAIL_PORT
     status_line EMAIL_USER
+    status_line EMAIL_SECURE
     status_line EMAIL_PASS
     status_line GOOGLE_ID
     status_line GOOGLE_SECRET
@@ -895,12 +899,16 @@ update_email_only() {
     prompt_value "EMAIL_USER" "$REPLY"
     UPDATE_VALUES[EMAIL_USER]="$REPLY"
 
+    get_existing_value EMAIL_SECURE
+    prompt_value "EMAIL_SECURE" "$REPLY"
+    UPDATE_VALUES[EMAIL_SECURE]="$REPLY"
+
     get_existing_value EMAIL_PASS
     prompt_secret_value "EMAIL_PASS" "$REPLY"
     UPDATE_VALUES[EMAIL_PASS]="$REPLY"
 
     if prompt_yes_no "Save Email / SMTP changes?" "Y"; then
-        update_env_keys_preserve EMAIL_HOST EMAIL_PORT EMAIL_USER EMAIL_PASS
+        update_env_keys_preserve EMAIL_HOST EMAIL_PORT EMAIL_USER EMAIL_PASS EMAIL_SECURE
         finish_targeted_update
     else
         warn "Email update cancelled."
