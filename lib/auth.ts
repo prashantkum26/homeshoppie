@@ -1,7 +1,17 @@
-import NextAuth, { type DefaultSession } from 'next-auth'
+import NextAuth, {
+  type DefaultSession,
+  type NextAuthOptions,
+} from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
-import { prisma } from './prisma'
+import { getServerSession } from 'next-auth/next'
+import { signIn, signOut } from 'next-auth/react'
 import bcrypt from 'bcryptjs'
+
+import { prisma } from './prisma'
+
+// ============================================================
+// NextAuth Type Extensions
+// ============================================================
 
 declare module 'next-auth' {
   interface Session {
@@ -27,163 +37,582 @@ declare module 'next-auth' {
   }
 }
 
-export const authOptions = {
+declare module 'next-auth/jwt' {
+  interface JWT {
+    role: string
+    emailVerified: boolean
+    phoneVerified: boolean
+    phone: string | null
+  }
+}
+
+// ============================================================
+// NextAuth Configuration
+// ============================================================
+
+export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
       name: 'credentials',
+
       credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' }
+        email: {
+          label: 'Email',
+          type: 'email',
+        },
+
+        password: {
+          label: 'Password',
+          type: 'password',
+        },
       },
+
       async authorize(credentials) {
+        // ----------------------------------------------------
+        // Basic input validation
+        // ----------------------------------------------------
+
         if (!credentials?.email || !credentials?.password) {
           return null
         }
 
+        const email = String(credentials.email)
+          .trim()
+          .toLowerCase()
+
+        const password = String(credentials.password)
+
+        if (!email || !password) {
+          return null
+        }
+
+        // ----------------------------------------------------
+        // Find user
+        // ----------------------------------------------------
+
         const user = await prisma.user.findUnique({
           where: {
-            email: credentials.email as string
+            email,
           },
+
           select: {
             id: true,
             email: true,
             name: true,
             role: true,
+
             passwordHash: true,
             passwordSalt: true,
+
             isActive: true,
             isLocked: true,
             lockUntil: true,
-            failedLoginCount: true,
+
             emailVerified: true,
+
             phone: true,
-            phoneVerified: true
-          }
+            phoneVerified: true,
+          },
         })
+
+        // ----------------------------------------------------
+        // User does not exist
+        // ----------------------------------------------------
 
         if (!user || !user.passwordHash) {
           return null
         }
 
-        // Check if account is active
-        if (user.isActive === false) {
+        // ----------------------------------------------------
+        // Account disabled
+        // ----------------------------------------------------
+
+        if (!user.isActive) {
           return null
         }
 
-        // Check if account is locked
-        if (user.isLocked && user.lockUntil && user.lockUntil > new Date()) {
-          return null
+        // ----------------------------------------------------
+        // Account locked
+        //
+        // If isLocked = true:
+        //
+        // 1. No lockUntil = permanently locked
+        // 2. Future lockUntil = temporarily locked
+        // 3. Past lockUntil = lock expired
+        // ----------------------------------------------------
+
+        if (user.isLocked) {
+          if (!user.lockUntil || user.lockUntil > new Date()) {
+            return null
+          }
+
+          // Lock expired.
+          //
+          // The login can continue.
+          // Your login security service should ideally
+          // clear isLocked/lockUntil after successful login.
         }
 
-        let isPasswordValid = false
+        // ----------------------------------------------------
+        // Password verification
+        // ----------------------------------------------------
 
-        // Use explicit salt if available, otherwise fallback to bcrypt's built-in salt
+        let passwordToVerify = password
+
+        // New password format:
+        //
+        // password + explicit passwordSalt
+        //
         if (user.passwordSalt) {
-          // New method: explicit salt
-          const saltedPassword = (credentials.password as string) + user.passwordSalt
-          isPasswordValid = await bcrypt.compare(saltedPassword, user.passwordHash)
-        } else {
-          // Backward compatibility: bcrypt's built-in salt
-          isPasswordValid = await bcrypt.compare(credentials.password as string, user.passwordHash)
+          passwordToVerify = password + user.passwordSalt
         }
+
+        const isPasswordValid = await bcrypt.compare(
+          passwordToVerify,
+          user.passwordHash
+        )
 
         if (!isPasswordValid) {
           return null
         }
 
+        // ----------------------------------------------------
+        // Successful authentication
+        // ----------------------------------------------------
+
         return {
           id: user.id,
           email: user.email,
           name: user.name,
+
           role: user.role,
-          emailVerified: !!user.emailVerified,
-          phoneVerified: !!user.phoneVerified, // Temporary fallback
+
+          emailVerified: Boolean(user.emailVerified),
+
+          phoneVerified: Boolean(user.phoneVerified),
+
           phone: user.phone,
         }
-      }
-    })
+      },
+    }),
   ],
+
+  // ==========================================================
+  // JWT Session
+  // ==========================================================
+
   session: {
-    strategy: 'jwt' as const
+    strategy: 'jwt',
   },
+
+  // ==========================================================
+  // Callbacks
+  // ==========================================================
+
   callbacks: {
-    async jwt({ token, user }: { token: any; user: any }) {
+    async jwt({ token, user, trigger }) {
+      // Initial sign-in
       if (user) {
+        token.sub = user.id
+        token.email = user.email
+        token.name = user.name
         token.role = user.role
-        token.emailVerified = user.emailVerified
-        token.phoneVerified = user.phoneVerified
+
+        token.emailVerified = Boolean(user.emailVerified)
+        token.phoneVerified = Boolean(user.phoneVerified)
         token.phone = user.phone
       }
+
+      // Session update requested from client
+      if (trigger === 'update' && token.sub) {
+        const currentUser = await prisma.user.findUnique({
+          where: {
+            id: token.sub,
+          },
+          select: {
+            email: true,
+            name: true,
+            role: true,
+            emailVerified: true,
+            phoneVerified: true,
+            phone: true,
+            isActive: true,
+          },
+        })
+
+        if (!currentUser || !currentUser.isActive) {
+          return token
+        }
+
+        token.email = currentUser.email
+        token.name = currentUser.name
+        token.role = currentUser.role
+
+        token.emailVerified = Boolean(
+          currentUser.emailVerified
+        )
+
+        token.phoneVerified = Boolean(
+          currentUser.phoneVerified
+        )
+
+        token.phone = currentUser.phone
+      }
+
       return token
     },
-    async session({ session, token }: { session: any; token: any }) {
+
+    async session({ session, token }) {
       if (token.sub) {
         session.user.id = token.sub
-        session.user.role = token.role
-        session.user.emailVerified = token.emailVerified
-        session.user.phoneVerified = token.phoneVerified
-        session.user.phone = token.phone
       }
+
+      if (token.email) {
+        session.user.email = token.email
+      }
+
+      session.user.name = token.name ?? null
+      session.user.role = token.role
+
+      session.user.emailVerified = Boolean(
+        token.emailVerified
+      )
+
+      session.user.phoneVerified = Boolean(
+        token.phoneVerified
+      )
+
+      session.user.phone = token.phone ?? null
+
       return session
-    }
+    },
   },
+
+  // ==========================================================
+  // Custom Pages
+  // ==========================================================
+
   pages: {
-    signIn: '/auth/signin',
-    signUp: '/auth/signup',
-  }
+    signIn: '/auth/signin'
+  },
 }
 
-// NextAuth v4 approach
+// ============================================================
+// NextAuth API Handler
+// ============================================================
+
 export default NextAuth(authOptions)
 
-// For server-side session access in NextAuth v4, we use getServerSession
-import { getServerSession } from 'next-auth/next'
+// ============================================================
+// Server-side Auth
+//
+// IMPORTANT:
+//
+// The session/JWT identifies the user.
+// The database is the source of truth.
+//
+// This means changes to:
+//
+// - isActive
+// - role
+// - emailVerified
+// - phoneVerified
+// - phone
+//
+// are reflected immediately.
+//
+// ============================================================
 
 export async function auth() {
   const session = await getServerSession(authOptions)
-  if (!session?.user?.id) return null
 
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      isActive: true,
-      role: true,
-      emailVerified: true,
-      phone: true,
-      phoneVerified: true,
-    },
-  })
+  // ----------------------------------------------------------
+  // No session
+  // ----------------------------------------------------------
 
-  if (
-    !currentUser?.isActive
-  ) {
+  if (!session?.user?.id) {
     return null
   }
 
-  session.user.role = currentUser.role
-  session.user.emailVerified = Boolean(currentUser.emailVerified)
-  session.user.phone = currentUser.phone
-  session.user.phoneVerified = Boolean(currentUser.phoneVerified)
-  return session
-}
+  // ----------------------------------------------------------
+  // Get CURRENT user from database
+  // ----------------------------------------------------------
 
-export async function hasVerifiedContact(userId: string): Promise<boolean> {
   const user = await prisma.user.findUnique({
-    where: { id: userId },
+    where: {
+      id: session.user.id,
+    },
+
     select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+
       isActive: true,
+
       emailVerified: true,
+
       phone: true,
       phoneVerified: true,
     },
   })
 
-  return Boolean(
-    user?.isActive &&
-    user.emailVerified &&
-    (!user.phone || user.phoneVerified)
-  )
+  // ----------------------------------------------------------
+  // User deleted
+  // ----------------------------------------------------------
+
+  if (!user) {
+    return null
+  }
+
+  // ----------------------------------------------------------
+  // User disabled
+  // ----------------------------------------------------------
+
+  if (!user.isActive) {
+    return null
+  }
+
+  // ----------------------------------------------------------
+  // Return DB-backed current user
+  //
+  // Do NOT trust potentially stale JWT values for
+  // security-sensitive information.
+  // ----------------------------------------------------------
+
+  return {
+    user: {
+      id: user.id,
+
+      email: user.email,
+
+      name: user.name,
+
+      role: user.role,
+
+      emailVerified: Boolean(
+        user.emailVerified
+      ),
+
+      phone: user.phone,
+
+      phoneVerified: Boolean(
+        user.phoneVerified
+      ),
+    },
+  }
 }
 
-// Export signIn and signOut from next-auth/react (they're imported differently in v4)
-export { signIn, signOut } from 'next-auth/react'
+// ============================================================
+// Get Current User
+//
+// Useful when you only need the database user object.
+// ============================================================
+
+export async function getCurrentUser() {
+  const session = await getServerSession(authOptions)
+
+  if (!session?.user?.id) {
+    return null
+  }
+
+  const user = await prisma.user.findUnique({
+    where: {
+      id: session.user.id,
+    },
+
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+
+      isActive: true,
+
+      emailVerified: true,
+
+      phone: true,
+      phoneVerified: true,
+    },
+  })
+
+  if (!user?.isActive) {
+    return null
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+
+    emailVerified: Boolean(
+      user.emailVerified
+    ),
+
+    phone: user.phone,
+
+    phoneVerified: Boolean(
+      user.phoneVerified
+    ),
+  }
+}
+
+// ============================================================
+// Required Contact Verification
+//
+// Rules:
+//
+// 1. Account must be active
+// 2. Email must be verified
+// 3. If phone exists, phone must be verified
+//
+// Example:
+//
+// emailVerified = true
+// phone = null
+// => true
+//
+// emailVerified = true
+// phone = "+919999999999"
+// phoneVerified = true
+// => true
+//
+// emailVerified = true
+// phone = "+919999999999"
+// phoneVerified = false
+// => false
+// ============================================================
+
+export async function hasVerifiedContact(
+  userId: string
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+
+    select: {
+      isActive: true,
+
+      emailVerified: true,
+
+      phone: true,
+      phoneVerified: true,
+    },
+  })
+
+  // ----------------------------------------------------------
+  // User missing / inactive
+  // ----------------------------------------------------------
+
+  if (!user?.isActive) {
+    return false
+  }
+
+  // ----------------------------------------------------------
+  // Email must always be verified
+  // ----------------------------------------------------------
+
+  if (!user.emailVerified) {
+    return false
+  }
+
+  // ----------------------------------------------------------
+  // Phone is optional.
+  //
+  // If phone exists, it MUST be verified.
+  // ----------------------------------------------------------
+
+  if (
+    user.phone &&
+    !user.phoneVerified
+  ) {
+    return false
+  }
+
+  return true
+}
+
+// ============================================================
+// Require Authenticated User
+//
+// Throws if the user is not authenticated.
+//
+// Useful for server actions / protected server logic.
+//
+// ============================================================
+
+export async function requireAuth() {
+  const session = await auth()
+
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+
+  return session
+}
+
+// ============================================================
+// Require Specific Role
+//
+// Example:
+//
+// const session = await requireRole('ADMIN')
+//
+// ============================================================
+
+export async function requireRole(
+  role: string
+) {
+  const session = await auth()
+
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+
+  if (session.user.role !== role) {
+    throw new Error('Forbidden')
+  }
+
+  return session
+}
+
+// ============================================================
+// Require Verified Contact
+//
+// Example:
+//
+// const session = await requireVerifiedContact()
+//
+// ============================================================
+
+export async function requireVerifiedContact() {
+  const session = await auth()
+
+  if (!session) {
+    throw new Error('Unauthorized')
+  }
+
+  const verified = await hasVerifiedContact(
+    session.user.id
+  )
+
+  if (!verified) {
+    throw new Error(
+      'Email or phone verification required'
+    )
+  }
+
+  return session
+}
+
+// ============================================================
+// Client-side signIn / signOut
+// ============================================================
+
+export {
+  signIn,
+  signOut,
+}
