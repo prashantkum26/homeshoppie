@@ -85,8 +85,31 @@ export const metadata: Metadata = {
   },
 
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      {
+        url: '/favicon/favicon.svg',
+        type: 'image/svg+xml',
+      },
+      {
+        url: '/favicon/favicon-96x96.png',
+        type: 'image/png',
+        sizes: '96x96',
+      },
+      {
+        url: '/favicon/favicon.ico',
+        type: 'image/x-icon',
+      },
+    ],
+    apple: [
+      {
+        url: '/favicon/apple-touch-icon.png',
+        sizes: '180x180',
+        type: 'image/png',
+      },
+    ],
   },
+
+  manifest: '/favicon/site.webmanifest',
 }
 
 interface RootLayoutProps {
@@ -105,7 +128,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
             </main>
             <Footer />
           </div>
-          <Toaster 
+          <Toaster
             position="bottom-right"
             toastOptions={{
               duration: 4000,
