@@ -97,7 +97,7 @@ export const authOptions = {
           name: user.name,
           role: user.role,
           emailVerified: !!user.emailVerified,
-          phoneVerified: !!(user as any).phoneVerified, // Temporary fallback
+          phoneVerified: !!user.phoneVerified, // Temporary fallback
           phone: user.phone,
         }
       }

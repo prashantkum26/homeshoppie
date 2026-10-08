@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
+import { validateEmail } from '@/lib/emailValidation'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 
@@ -23,14 +24,16 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-    if (!emailRegex.test(email)) {
+    const emailValidation = validateEmail(email)
+
+    if (!emailValidation.isValid) {
       return NextResponse.json(
-        { error: 'Please enter a valid email address' },
+        { error: emailValidation.error },
         { status: 400 }
       )
     }
+
+    const normalizedEmail = emailValidation.email
 
     // Phone validation (if provided)
     if (phone) {
@@ -58,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email: normalizedEmail.toLowerCase().trim() }
     })
 
     if (existingUser) {
@@ -93,7 +96,7 @@ export async function POST(request: NextRequest) {
     const user = await prisma.user.create({
       data: {
         name: name.trim(),
-        email: email.toLowerCase().trim(),
+        email: normalizedEmail.toLowerCase().trim(),
         phone: phone || null,
         phoneCountryCode: phone ? countryCode : null,
         passwordHash: hashedPassword,
@@ -101,11 +104,11 @@ export async function POST(request: NextRequest) {
         role: 'USER',
         // Set verification status - users need to verify before login
         emailVerified: null, // Will be set when email is verified
-        phoneVerified: null, // Will be set when phone is verified
+        phoneVerified: new Date(), // Currently set to the current date and time for phone optional verification
       }
     })
 
-    console.log(`User created with explicit salt: ${email}`)
+    console.log(`User created with explicit salt: ${normalizedEmail}`)
 
     // TODO: Send email verification
     // TODO: Send SMS verification (if phone provided)
