@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import crypto from 'crypto'
 import { sendEmail } from '@/lib/email'
+import { buildVerificationEmail } from '@/lib/email-templates/verification-email'
 
 // Rate limiter: 3 requests per 5 minutes per IP
 const limiter = rateLimit({
@@ -81,6 +82,28 @@ export async function POST(request: NextRequest) {
     const token = crypto.randomBytes(32).toString('hex')
     const expires = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
 
+    const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.NEXTAUTH_URL
+
+    if (!baseUrl) {
+      console.error('Missing verification email base URL')
+
+      await prisma.verificationToken.deleteMany({
+        where: {
+          identifier: user.email,
+          token,
+          type: 'EMAIL_VERIFICATION',
+        },
+      })
+
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Email verification is temporarily unavailable.',
+        },
+        { status: 503 }
+      )
+    }
+
     // Delete any existing email verification tokens for this user
     await prisma.verificationToken.deleteMany({
       where: {
@@ -99,10 +122,13 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
+    const verificationUrl = `${normalizedBaseUrl}/auth/verify-email?token=${encodeURIComponent(token)}`
+
     const emailResult = await sendEmail({
-      subject:"Verify your HomeShoppie account",
+      subject: "Verify your HomeShoppie account",
       to: user.email,
-      html: `<p>Verify your HomeShoppie account by clicking <a href="${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/auth/verify-email?token=${token}">this link</a>.</p>`,
+      html: buildVerificationEmail({ verificationUrl }),
     });
 
     if (!emailResult.success) {
