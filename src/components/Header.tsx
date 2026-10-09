@@ -30,18 +30,20 @@ const navigation: NavigationItem[] = [
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false)
   const [userMenuOpen, setUserMenuOpen] = useState<boolean>(false)
+  
+  // Hydration-safe state for persisted stores
   const [totalItems, setTotalItems] = useState<number>(0)
   const [wishlistCount, setWishlistCount] = useState<number>(0)
+  
   const { data: session } = useSession()
 
-  // Store references for subscriptions
-  const cartStore = useCartStore()
-  const wishlistStore = useWishlistStore()
-
+  // Handle Zustand store subscriptions cleanly (prevents hydration mismatch)
   useEffect(() => {
-    setTotalItems(cartStore.getTotalItems())
-    setWishlistCount(wishlistStore.getWishlistCount())
+    // Initial load
+    setTotalItems(useCartStore.getState().getTotalItems())
+    setWishlistCount(useWishlistStore.getState().getWishlistCount())
 
+    // Subscribe to future changes
     const unsubscribeCart = useCartStore.subscribe((state) => {
       setTotalItems(state.getTotalItems())
     })
@@ -54,23 +56,20 @@ export default function Header() {
       unsubscribeCart()
       unsubscribeWishlist()
     }
-  }, [cartStore, wishlistStore])
+  }, []) // Empty dependency array prevents unnecessary re-renders
 
   // Handle clicks outside user menu to close it
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element
-
       if (userMenuOpen && !target.closest('.user-menu-container')) {
         setUserMenuOpen(false)
       }
     }
 
-    if (!userMenuOpen) {
-      return
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
     }
-
-    document.addEventListener('mousedown', handleClickOutside)
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
@@ -96,14 +95,18 @@ export default function Header() {
     <header className="bg-white shadow-sm sticky top-0 z-50">
       <nav className="container-custom">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
+          {/* ========================================== */}
+          {/* Logo                                       */}
+          {/* ========================================== */}
           <div className="flex-shrink-0">
             <Link href="/" className="text-2xl font-display font-bold text-primary-600 tracking-tight">
               Home<span className="text-accent text-primary-500">Shoppie</span>
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
+          {/* ========================================== */}
+          {/* Desktop Navigation                         */}
+          {/* ========================================== */}
           <div className="hidden md:block">
             <div className="ml-10 flex items-baseline space-x-4">
               {navigation.map((item) => (
@@ -118,7 +121,9 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Search Bar */}
+          {/* ========================================== */}
+          {/* Desktop Search Bar                         */}
+          {/* ========================================== */}
           <div className="hidden md:flex flex-1 max-w-lg mx-8">
             <SearchBar
               placeholder="Search products, categories..."
@@ -126,10 +131,12 @@ export default function Header() {
             />
           </div>
 
-          {/* Right side actions */}
+          {/* ========================================== */}
+          {/* Desktop Right Side Actions                 */}
+          {/* ========================================== */}
           <div className="hidden md:flex items-center space-x-4">
             {/* Wishlist */}
-            <Link href="/wishlist" className="relative p-2" title="My Wishlist">
+            <Link href="/wishlist" className="relative p-2" aria-label="My Wishlist">
               <HeartIcon className="h-6 w-6 text-gray-700 hover:text-red-500 transition-colors" />
               {wishlistCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -139,8 +146,8 @@ export default function Header() {
             </Link>
 
             {/* Cart */}
-            <Link href="/cart" className="relative p-2">
-              <ShoppingCartIcon className="h-6 w-6 text-gray-700 hover:text-primary-600" />
+            <Link href="/cart" className="relative p-2" aria-label="Shopping Cart">
+              <ShoppingCartIcon className="h-6 w-6 text-gray-700 hover:text-primary-600 transition-colors" />
               {totalItems > 0 && (
                 <span className="absolute -top-1 -right-1 bg-primary-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
                   {totalItems}
@@ -152,9 +159,11 @@ export default function Header() {
             <div className="relative user-menu-container">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
+                aria-expanded={userMenuOpen}
+                aria-label="User Menu"
                 className="flex items-center text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
               >
-                <UserIcon className="h-6 w-6 text-gray-700" />
+                <UserIcon className="h-6 w-6 text-gray-700 transition-colors hover:text-primary-600" />
               </button>
 
               {userMenuOpen && (
@@ -162,7 +171,7 @@ export default function Header() {
                   <div className="py-1">
                     {session ? (
                       <>
-                        <div className="px-4 py-2 text-sm text-gray-700 border-b">
+                        <div className="px-4 py-2 text-sm text-gray-700 border-b truncate">
                           {session.user?.name || session.user?.email}
                         </div>
                         <Link
@@ -223,9 +232,22 @@ export default function Header() {
             </div>
           </div>
 
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center space-x-4">
-            <Link href="/cart" className="relative p-2">
+          {/* ========================================== */}
+          {/* Mobile Right Side Actions (Always Visible) */}
+          {/* ========================================== */}
+          <div className="md:hidden flex items-center space-x-3">
+            {/* Wishlist */}
+            <Link href="/wishlist" className="relative p-2" aria-label="My Wishlist">
+              <HeartIcon className="h-6 w-6 text-gray-700" />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                  {wishlistCount}
+                </span>
+              )}
+            </Link>
+
+            {/* Cart */}
+            <Link href="/cart" className="relative p-2" aria-label="Shopping Cart">
               <ShoppingCartIcon className="h-6 w-6 text-gray-700" />
               {totalItems > 0 && (
                 <span className="absolute -top-1 -right-1 bg-primary-600 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
@@ -233,8 +255,12 @@ export default function Header() {
                 </span>
               )}
             </Link>
+            
+            {/* Hamburger Toggle */}
             <button
               type="button"
+              aria-label="Toggle Menu"
+              aria-expanded={mobileMenuOpen}
               className="inline-flex items-center justify-center p-2 rounded-md text-gray-700 hover:text-primary-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-500"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
@@ -247,10 +273,13 @@ export default function Header() {
           </div>
         </div>
 
-        {/* Mobile menu */}
+        {/* ========================================== */}
+        {/* Mobile Dropdown Menu                       */}
+        {/* ========================================== */}
         {mobileMenuOpen && (
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
+              
               {/* Mobile Search */}
               <div className="px-3 py-2">
                 <SearchBar
@@ -260,7 +289,7 @@ export default function Header() {
                 />
               </div>
 
-              {/* Navigation Links */}
+              {/* Mobile Navigation Links */}
               {navigation.map((item) => (
                 <Link
                   key={item.name}
@@ -272,13 +301,14 @@ export default function Header() {
                 </Link>
               ))}
 
-              {/* Auth Links */}
+              {/* Mobile Auth Links */}
               <div className="border-t border-gray-200 pt-4">
                 {session ? (
                   <>
-                    <div className="px-3 py-2 text-sm text-gray-600">
+                    <div className="px-3 py-2 text-sm text-gray-600 truncate">
                       {session.user?.name || session.user?.email}
                     </div>
+                    
                     <Link
                       href="/dashboard"
                       className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block px-3 py-2 rounded-md text-base font-medium"
@@ -286,6 +316,16 @@ export default function Header() {
                     >
                       Dashboard
                     </Link>
+                    
+                    {/* Synchronized "My Orders" link */}
+                    <Link
+                      href="/orders"
+                      className="text-gray-700 hover:text-primary-600 hover:bg-gray-100 block px-3 py-2 rounded-md text-base font-medium"
+                      onClick={() => setMobileMenuOpen(false)}
+                    >
+                      My Orders
+                    </Link>
+
                     {session.user?.role === 'ADMIN' && (
                       <Link
                         href="/admin"
@@ -295,6 +335,7 @@ export default function Header() {
                         Admin Dashboard
                       </Link>
                     )}
+                    
                     <button
                       onClick={() => {
                         signOut()

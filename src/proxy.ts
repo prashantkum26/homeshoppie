@@ -1,135 +1,184 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-// Get client IP address (Edge Runtime compatible)
-function getClientIP(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  const realIP = request.headers.get('x-real-ip')
-  const cfConnectingIP = request.headers.get('cf-connecting-ip')
+// ============================================================
+// Enterprise Security Middleware
+// Next.js 16 + NextAuth.js v4 + JWT (Edge Compatible)
+// ============================================================
 
-  if (forwarded) {
-    return forwarded.split(',')[0].trim()
-  }
+const SIGN_IN_PATH = '/auth/signin'
+const VERIFY_EMAIL_PATH = '/auth/verify-email'
+const VERIFY_PHONE_PATH = '/auth/verify-phone'
 
-  return cfConnectingIP || realIP || 'unknown'
-}
+const PROTECTED_ROUTES = ['/dashboard', '/orders', '/checkout', '/admin', '/cart'] as const
+const ADMIN_ROUTES = ['/admin'] as const
 
-// Add security headers (Edge Runtime compatible)
-function addSecurityHeaders(response: NextResponse): NextResponse {
-  // Prevent XSS attacks
-  response.headers.set('X-XSS-Protection', '1; mode=block')
+// ============================================================
+// 1. Attack Mitigation: Strict Security Headers (XSS, Clickjacking, Sniffing)
+// ============================================================
+function applySecurityHeaders(response: NextResponse, _request: NextRequest): NextResponse {
+  const isProd = process.env.NODE_ENV === 'production'
+  const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
+  
+  // Set nonce in headers for use in Server Components
+  response.headers.set('x-nonce', nonce)
 
-  // Prevent clickjacking
+  const scriptSrc = isProd
+    ? `'self' 'nonce-${nonce}' 'strict-dynamic' https://checkout.razorpay.com`
+    : `'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com`
+
+  const csp = [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    `script-src ${scriptSrc}`,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' https://fonts.gstatic.com",
+    "img-src 'self' data: blob: https:",
+    "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+    "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
+    "upgrade-insecure-requests"
+  ].join('; ')
+
+  response.headers.set('Content-Security-Policy', csp)
   response.headers.set('X-Frame-Options', 'DENY')
-
-  // Prevent MIME type sniffing
   response.headers.set('X-Content-Type-Options', 'nosniff')
-
-  // Referrer policy
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self)')
+  response.headers.set('X-DNS-Prefetch-Control', 'off')
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+  response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
-  // Content Security Policy
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com; " +
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-    "font-src 'self' https://fonts.gstatic.com; " +
-    "img-src 'self' data: blob: https:; " +
-    "connect-src 'self' https://api.razorpay.com; " +
-    "frame-src https://api.razorpay.com;"
-  )
-
-  // Strict Transport Security (HTTPS only)
-  if (process.env.NODE_ENV === 'production') {
-    response.headers.set(
-      'Strict-Transport-Security',
-      'max-age=31536000; includeSubDomains; preload'
-    )
+  if (isProd) {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
   }
-
-  // Permissions Policy
-  response.headers.set(
-    'Permissions-Policy',
-    'camera=(), microphone=(), geolocation=(), payment=(self)'
-  )
 
   return response
 }
 
-// Next.js 16+ proxy function - lightweight request boundary
-export default async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+// ============================================================
+// Response Helpers
+// ============================================================
+function redirectTo(request: NextRequest, pathname: string, callbackUrl?: string): NextResponse {
+  const url = request.nextUrl.clone()
+  url.pathname = pathname
+  url.search = ''
+  if (callbackUrl) url.searchParams.set('callbackUrl', callbackUrl)
+  return applySecurityHeaders(NextResponse.redirect(url), request)
+}
 
-  // Create response with security headers
-  let response = NextResponse.next()
-  response = addSecurityHeaders(response)
+function matchesRoute(pathname: string, routes: readonly string[]): boolean {
+  return routes.some(route => pathname === route || pathname.startsWith(`${route}/`))
+}
 
-  // Get client IP and add to headers for route handlers to use
-  const ipAddress = getClientIP(request)
-  response.headers.set('x-client-ip', ipAddress)
-  response.headers.set('x-pathname', pathname)
+export default async function middleware(request: NextRequest) {
+  const { pathname, search, origin } = request.nextUrl
 
-  // Protected routes that require authentication
-  const protectedRoutes = [
-    '/dashboard', 
-    '/orders', 
-    '/cart', 
-    '/checkout', 
-    '/admin'
-  ];
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route))
+  // ============================================================
+  // 2. Attack Mitigation: URL Normalization (Path Traversal)
+  // ============================================================
+  try {
+    decodeURIComponent(pathname)
+  } catch (e) {
+    return new NextResponse('Bad Request', { status: 400 })
+  }
+  
+  if (pathname.includes('//') || pathname.includes('%00')) {
+    const cleanUrl = request.nextUrl.clone()
+    cleanUrl.pathname = pathname.replace(/\/+/g, '/').replace(/%00/g, '')
+    return NextResponse.redirect(cleanUrl)
+  }
 
-  // Verification routes (allow access without verification)
-  // const verificationRoutes = ['/auth/verify', '/auth/verify-email', '/auth/verify-phone']
-  // const isVerificationRoute = verificationRoutes.some(route => pathname.startsWith(route))
-
-  // Auth routes (login, signup, etc.)
-  // const authRoutes = ['/auth/signin', '/auth/signup', '/auth/forgot-password', '/auth/reset-password']
-  // const isAuthRoute = authRoutes.some(route => pathname.startsWith(route))
-
-  if (isProtectedRoute) {
-    // Check if user is authenticated
-    const sessionToken = request.cookies.get('next-auth.session-token') ||
-      request.cookies.get('__Secure-next-auth.session-token')
-
-    if (!sessionToken) {
-      const signInUrl = new URL('/auth/signin', request.url)
-      signInUrl.searchParams.set('callbackUrl', pathname)
-      return NextResponse.redirect(signInUrl)
-    }
-
-    // For authenticated users, check verification status
-    // This requires a database lookup, so we'll implement it as a server-side check
-    try {
-      const { auth } = await import('../lib/auth')
-      const session = await auth()
-
-      if (session?.user) {
-        // Check if email verification is required
-        if (!session.user.emailVerified) {
-          const verifyUrl = new URL('/auth/verify-email', request.url)
-          return NextResponse.redirect(verifyUrl)
-        }
-
-        // Check if phone verification is required (if user has a phone number)
-        if (session.user.phone && !session.user.phoneVerified) {
-          const verifyUrl = new URL('/auth/verify-phone', request.url)
-          return NextResponse.redirect(verifyUrl)
-        }
+  // ============================================================
+  // 3. Attack Mitigation: CSRF Origin Check for API Mutations
+  // ============================================================
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
+    const method = request.method
+    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+      const requestOrigin = request.headers.get('origin')
+      const requestHost = request.headers.get('host')
+      
+      // Ensure the request originates from your actual domain
+      if (requestOrigin && !requestOrigin.includes(requestHost || '')) {
+        return new NextResponse('CSRF Verification Failed', { status: 403 })
       }
-    } catch (error) {
-      console.error('Proxy verification check error:', error)
-      // On error, allow the request to proceed to avoid breaking the app
     }
   }
 
-  return response
+  // Public routes pass through, applying security headers
+  if (!matchesRoute(pathname, PROTECTED_ROUTES)) {
+    return applySecurityHeaders(NextResponse.next(), request)
+  }
+
+  // ============================================================
+  // 4. Attack Mitigation: Cache Poisoning on Protected Routes
+  // ============================================================
+  const continueResponse = () => {
+    const response = NextResponse.next()
+    response.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, proxy-revalidate')
+    response.headers.set('Pragma', 'no-cache')
+    response.headers.set('Expires', '0')
+    return applySecurityHeaders(response, request)
+  }
+
+  const secret = process.env.NEXTAUTH_SECRET
+  if (!secret) {
+    return new NextResponse('Configuration Error', { status: 500 })
+  }
+
+  // ============================================================
+  // 5. Attack Mitigation: Edge-safe JWT Session Validation
+  // ============================================================
+  let token
+  try {
+    const configuredUrl = process.env.NEXTAUTH_URL
+    const secureCookie = configuredUrl
+      ? configuredUrl.startsWith('https://')
+      : request.nextUrl.protocol === 'https:'
+
+    token = await getToken({
+      req: request,
+      secret,
+      secureCookie,
+    })
+  } catch {
+    token = null
+  }
+
+  // Unauthenticated
+  if (!token?.sub) {
+    return redirectTo(request, SIGN_IN_PATH, `${pathname}${search}`)
+  }
+
+  // Verification Checks
+  if (!token.emailVerified && !pathname.startsWith(VERIFY_EMAIL_PATH)) {
+    return redirectTo(request, VERIFY_EMAIL_PATH)
+  }
+
+  if (token.emailVerified && token.phone && !token.phoneVerified && !pathname.startsWith(VERIFY_PHONE_PATH)) {
+    return redirectTo(request, VERIFY_PHONE_PATH)
+  }
+
+  // Privilege Escalation Check (RBAC)
+  if (matchesRoute(pathname, ADMIN_ROUTES) && token.role !== 'ADMIN') {
+    return redirectTo(request, '/')
+  }
+
+  return continueResponse()
 }
 
-// Configure which paths the proxy runs on - Next.js 16+ format
 export const config = {
   matcher: [
-    // Match all routes except static files and images
-    '/((?!_next/static|_next/image|favicon.ico|uploads).*)',
-  ]
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - uploads (public user uploads)
+     * - api/auth (NextAuth endpoints)
+     */
+    '/((?!_next/static|_next/image|favicon.ico|uploads|api/auth).*)',
+  ],
 }
