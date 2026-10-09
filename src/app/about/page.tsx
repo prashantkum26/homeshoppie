@@ -8,7 +8,6 @@ import {
   ShieldCheckIcon,
   UsersIcon,
   SparklesIcon,
-  GlobeAltIcon,
   HandRaisedIcon,
   ShoppingBagIcon,
 } from '@heroicons/react/24/outline'
@@ -23,10 +22,10 @@ interface Feature {
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
 }
 
-interface Stat {
-  name: string
-  value: string
-}
+// interface Stat {
+//   name: string
+//   value: string
+// }
 
 interface TeamMember {
   name: string
@@ -62,12 +61,12 @@ const features: Feature[] = [
   },
 ]
 
-const stats: Stat[] = [
-  { name: 'Customer focused', value: 'Always' },
-  { name: 'Product selection', value: 'Curated' },
-  { name: 'Shopping experience', value: 'Simple' },
-  { name: 'Our commitment', value: 'Quality' },
-]
+// const stats: Stat[] = [
+//   { name: 'Customer focused', value: 'Always' },
+//   { name: 'Product selection', value: 'Curated' },
+//   { name: 'Shopping experience', value: 'Simple' },
+//   { name: 'Our commitment', value: 'Quality' },
+// ]
 
 const team: TeamMember[] = [
   {

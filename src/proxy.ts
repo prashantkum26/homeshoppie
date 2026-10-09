@@ -74,7 +74,7 @@ function matchesRoute(pathname: string, routes: readonly string[]): boolean {
 }
 
 export default async function middleware(request: NextRequest) {
-  const { pathname, search, origin } = request.nextUrl
+  const { pathname, search } = request.nextUrl
 
   // ============================================================
   // 2. Attack Mitigation: URL Normalization (Path Traversal)

@@ -1,6 +1,10 @@
+
 import type { MetadataRoute } from 'next'
 import { SEO_CONFIG } from '@/lib/seo/config'
 import { prisma } from '@/lib/prisma'
+
+// Generate the sitemap at request time instead of during `next build`.
+export const dynamic = 'force-dynamic'
 
 async function getSitemapProducts() {
   return prisma.product.findMany({
@@ -81,38 +85,35 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     },
   ]
 
-  const [products, categories] = await Promise.all([
-    getSitemapProducts(),
-    getSitemapCategories(),
-  ])
+  try {
+    const [products, categories] = await Promise.all([
+      getSitemapProducts(),
+      getSitemapCategories(),
+    ])
 
-  const productPages: MetadataRoute.Sitemap =
-    products.map((product) => ({
-      url: `${SEO_CONFIG.siteUrl}/products/${product.id}`,
+    const productPages: MetadataRoute.Sitemap = products.map(
+      (product) => ({
+        url: `${SEO_CONFIG.siteUrl}/products/${product.id}`,
+        lastModified: product.updatedAt ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.8,
+      }),
+    )
 
-      lastModified:
-        product.updatedAt || now,
+    const categoryPages: MetadataRoute.Sitemap = categories.map(
+      (category) => ({
+        url: `${SEO_CONFIG.siteUrl}/categories/${category.slug}`,
+        lastModified: category.updatedAt ?? now,
+        changeFrequency: 'weekly',
+        priority: 0.8,
+      }),
+    )
 
-      changeFrequency: 'weekly',
+    return [...staticPages, ...categoryPages, ...productPages]
+  } catch (error) {
+    // Preserve static URLs if MongoDB is temporarily unavailable.
+    console.error('[Sitemap] Failed to load dynamic URLs:', error)
 
-      priority: 0.8,
-    }))
-
-  const categoryPages: MetadataRoute.Sitemap =
-    categories.map((category) => ({
-      url: `${SEO_CONFIG.siteUrl}/categories/${category.slug}`,
-
-      lastModified:
-        category.updatedAt || now,
-
-      changeFrequency: 'weekly',
-
-      priority: 0.8,
-    }))
-
-  return [
-    ...staticPages,
-    ...categoryPages,
-    ...productPages,
-  ]
+    return staticPages
+  }
 }
