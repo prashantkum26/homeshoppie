@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     // Send password reset email
     try {
-      const emailResult = await sendPasswordResetEmail(user.email, resetToken, user.name || undefined)
+      const emailResult = await sendPasswordResetEmail({ email: user.email, resetToken, userName: user.name })
       
       if (!emailResult.success) {
         console.error('Failed to send password reset email')

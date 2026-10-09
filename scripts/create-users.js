@@ -15,7 +15,7 @@ async function createUsers() {
         name: 'Admin User',
         passwordHash: adminPasswordHash,
         role: 'ADMIN',
-        phone: '+91 98765 43210',
+        phone: '+91 00000 00000',
         emailVerified: new Date(),
         phoneVerified: new Date()
       }

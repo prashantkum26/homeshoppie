@@ -249,14 +249,14 @@ const users = [
     name: 'Admin User',
     password: 'Kp26@1995',
     role: 'ADMIN' as const,
-    phone: '+91 98765 43210'
+    phone: '+91 00000 00000'
   },
   {
     email: 'customer@homeshoppie.com', 
     name: 'Test Customer',
     password: 'Kp26@1995',
     role: 'USER' as const,
-    phone: '+91 98765 43211'
+    phone: '+91 00000 00000'
   }
 ]
 
