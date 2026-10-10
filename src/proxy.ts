@@ -1,184 +1,269 @@
+
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
-
-// ============================================================
-// Enterprise Security Middleware
-// Next.js 16 + NextAuth.js v4 + JWT (Edge Compatible)
-// ============================================================
 
 const SIGN_IN_PATH = '/auth/signin'
 const VERIFY_EMAIL_PATH = '/auth/verify-email'
 const VERIFY_PHONE_PATH = '/auth/verify-phone'
 
-const PROTECTED_ROUTES = ['/dashboard', '/orders', '/checkout', '/admin', '/cart'] as const
+const PROTECTED_ROUTES = [
+  '/dashboard',
+  '/orders',
+  '/checkout',
+  '/admin',
+  '/cart',
+] as const
+
 const ADMIN_ROUTES = ['/admin'] as const
 
-// ============================================================
-// 1. Attack Mitigation: Strict Security Headers (XSS, Clickjacking, Sniffing)
-// ============================================================
-function applySecurityHeaders(response: NextResponse, _request: NextRequest): NextResponse {
-  const isProd = process.env.NODE_ENV === 'production'
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64')
-  
-  // Set nonce in headers for use in Server Components
-  response.headers.set('x-nonce', nonce)
+function generateNonce(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
 
-  const scriptSrc = isProd
-    ? `'self' 'nonce-${nonce}' 'strict-dynamic' https://checkout.razorpay.com`
-    : `'self' 'unsafe-inline' 'unsafe-eval' https://checkout.razorpay.com`
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]!)
+  }
 
-  const csp = [
+  return btoa(binary)
+}
+
+function buildCsp(nonce: string, isProd: boolean): string {
+  const scriptSources = [
+    "'self'",
+    `'nonce-${nonce}'`,
+    'https://checkout.razorpay.com',
+  ]
+
+  // Keep development tooling functional without weakening production CSP.
+  if (!isProd) {
+    scriptSources.push("'unsafe-eval'")
+  }
+
+  const directives = [
     "default-src 'self'",
     "base-uri 'self'",
-    "form-action 'self'",
     "object-src 'none'",
     "frame-ancestors 'none'",
-    `script-src ${scriptSrc}`,
+    "form-action 'self' https://api.razorpay.com",
+    `script-src ${scriptSources.join(' ')}`,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
     "img-src 'self' data: blob: https:",
-    "connect-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-    "frame-src 'self' https://api.razorpay.com https://checkout.razorpay.com",
-    "upgrade-insecure-requests"
-  ].join('; ')
+    [
+      "connect-src 'self'",
+      'https://api.razorpay.com',
+      'https://checkout.razorpay.com',
+    ].join(' '),
+    [
+      "frame-src 'self'",
+      'https://api.razorpay.com',
+      'https://checkout.razorpay.com',
+    ].join(' '),
+  ]
 
+  if (isProd) {
+    directives.push('upgrade-insecure-requests')
+  }
+
+  return directives.join('; ')
+}
+
+function applySecurityHeaders(
+  response: NextResponse,
+  csp: string,
+  nonce: string,
+): NextResponse {
   response.headers.set('Content-Security-Policy', csp)
+  response.headers.set('x-nonce', nonce)
+
   response.headers.set('X-Frame-Options', 'DENY')
   response.headers.set('X-Content-Type-Options', 'nosniff')
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(self)')
+  response.headers.set(
+    'Referrer-Policy',
+    'strict-origin-when-cross-origin',
+  )
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(), microphone=(), geolocation=(), payment=(self)',
+  )
   response.headers.set('X-DNS-Prefetch-Control', 'off')
   response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
   response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
-  if (isProd) {
-    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+  if (process.env.NODE_ENV === 'production') {
+    response.headers.set(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains',
+    )
   }
 
   return response
 }
 
-// ============================================================
-// Response Helpers
-// ============================================================
-function redirectTo(request: NextRequest, pathname: string, callbackUrl?: string): NextResponse {
-  const url = request.nextUrl.clone()
-  url.pathname = pathname
-  url.search = ''
-  if (callbackUrl) url.searchParams.set('callbackUrl', callbackUrl)
-  return applySecurityHeaders(NextResponse.redirect(url), request)
+function matchesRoute(
+  pathname: string,
+  routes: readonly string[],
+): boolean {
+  return routes.some(
+    (route) =>
+      pathname === route || pathname.startsWith(`${route}/`),
+  )
 }
 
-function matchesRoute(pathname: string, routes: readonly string[]): boolean {
-  return routes.some(route => pathname === route || pathname.startsWith(`${route}/`))
-}
-
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl
+  const isProd = process.env.NODE_ENV === 'production'
 
-  // ============================================================
-  // 2. Attack Mitigation: URL Normalization (Path Traversal)
-  // ============================================================
+  const nonce = generateNonce()
+  const csp = buildCsp(nonce, isProd)
+
+  // Forward the policy and nonce to Next.js rendering.
+  const requestHeaders = new Headers(request.headers)
+  requestHeaders.set('x-nonce', nonce)
+  requestHeaders.set('Content-Security-Policy', csp)
+
+  const next = (noCache = false) => {
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
+
+    if (noCache) {
+      response.headers.set(
+        'Cache-Control',
+        'private, no-store, no-cache, must-revalidate',
+      )
+      response.headers.set('Pragma', 'no-cache')
+      response.headers.set('Expires', '0')
+    }
+
+    return applySecurityHeaders(response, csp, nonce)
+  }
+
+  const redirect = (path: string, callbackUrl?: string) => {
+    const url = request.nextUrl.clone()
+    url.pathname = path
+    url.search = ''
+
+    if (callbackUrl) {
+      url.searchParams.set('callbackUrl', callbackUrl)
+    }
+
+    return applySecurityHeaders(
+      NextResponse.redirect(url),
+      csp,
+      nonce,
+    )
+  }
+
+  // Reject malformed encoded paths.
   try {
     decodeURIComponent(pathname)
-  } catch (e) {
-    return new NextResponse('Bad Request', { status: 400 })
-  }
-  
-  if (pathname.includes('//') || pathname.includes('%00')) {
-    const cleanUrl = request.nextUrl.clone()
-    cleanUrl.pathname = pathname.replace(/\/+/g, '/').replace(/%00/g, '')
-    return NextResponse.redirect(cleanUrl)
+  } catch {
+    return applySecurityHeaders(
+      new NextResponse('Bad Request', { status: 400 }),
+      csp,
+      nonce,
+    )
   }
 
-  // ============================================================
-  // 3. Attack Mitigation: CSRF Origin Check for API Mutations
-  // ============================================================
-  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) {
-    const method = request.method
-    if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
-      const requestOrigin = request.headers.get('origin')
-      const requestHost = request.headers.get('host')
-      
-      // Ensure the request originates from your actual domain
-      if (requestOrigin && !requestOrigin.includes(requestHost || '')) {
-        return new NextResponse('CSRF Verification Failed', { status: 403 })
+  if (pathname.includes('//') || pathname.includes('%00')) {
+    return applySecurityHeaders(
+      new NextResponse('Bad Request', { status: 400 }),
+      csp,
+      nonce,
+    )
+  }
+
+  // Exact same-origin validation for browser-originated mutations.
+  if (
+    pathname.startsWith('/api/') &&
+    !pathname.startsWith('/api/auth/') &&
+    ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+  ) {
+    const origin = request.headers.get('origin')
+
+    if (origin) {
+      try {
+        if (new URL(origin).origin !== request.nextUrl.origin) {
+          return applySecurityHeaders(
+            new NextResponse('CSRF Verification Failed', {
+              status: 403,
+            }),
+            csp,
+            nonce,
+          )
+        }
+      } catch {
+        return applySecurityHeaders(
+          new NextResponse('Invalid Origin', { status: 403 }),
+          csp,
+          nonce,
+        )
       }
     }
   }
 
-  // Public routes pass through, applying security headers
   if (!matchesRoute(pathname, PROTECTED_ROUTES)) {
-    return applySecurityHeaders(NextResponse.next(), request)
-  }
-
-  // ============================================================
-  // 4. Attack Mitigation: Cache Poisoning on Protected Routes
-  // ============================================================
-  const continueResponse = () => {
-    const response = NextResponse.next()
-    response.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate, proxy-revalidate')
-    response.headers.set('Pragma', 'no-cache')
-    response.headers.set('Expires', '0')
-    return applySecurityHeaders(response, request)
+    return next()
   }
 
   const secret = process.env.NEXTAUTH_SECRET
+
   if (!secret) {
-    return new NextResponse('Configuration Error', { status: 500 })
+    return applySecurityHeaders(
+      new NextResponse('Configuration Error', { status: 500 }),
+      csp,
+      nonce,
+    )
   }
 
-  // ============================================================
-  // 5. Attack Mitigation: Edge-safe JWT Session Validation
-  // ============================================================
   let token
-  try {
-    const configuredUrl = process.env.NEXTAUTH_URL
-    const secureCookie = configuredUrl
-      ? configuredUrl.startsWith('https://')
-      : request.nextUrl.protocol === 'https:'
 
+  try {
     token = await getToken({
       req: request,
       secret,
-      secureCookie,
+      secureCookie: request.nextUrl.protocol === 'https:',
     })
   } catch {
     token = null
   }
 
-  // Unauthenticated
   if (!token?.sub) {
-    return redirectTo(request, SIGN_IN_PATH, `${pathname}${search}`)
+    return redirect(SIGN_IN_PATH, `${pathname}${search}`)
   }
 
-  // Verification Checks
-  if (!token.emailVerified && !pathname.startsWith(VERIFY_EMAIL_PATH)) {
-    return redirectTo(request, VERIFY_EMAIL_PATH)
+  if (
+    !token.emailVerified &&
+    !pathname.startsWith(VERIFY_EMAIL_PATH)
+  ) {
+    return redirect(VERIFY_EMAIL_PATH)
   }
 
-  if (token.emailVerified && token.phone && !token.phoneVerified && !pathname.startsWith(VERIFY_PHONE_PATH)) {
-    return redirectTo(request, VERIFY_PHONE_PATH)
+  if (
+    token.emailVerified &&
+    token.phone &&
+    !token.phoneVerified &&
+    !pathname.startsWith(VERIFY_PHONE_PATH)
+  ) {
+    return redirect(VERIFY_PHONE_PATH)
   }
 
-  // Privilege Escalation Check (RBAC)
-  if (matchesRoute(pathname, ADMIN_ROUTES) && token.role !== 'ADMIN') {
-    return redirectTo(request, '/')
+  if (
+    matchesRoute(pathname, ADMIN_ROUTES) &&
+    token.role !== 'ADMIN'
+  ) {
+    return redirect('/')
   }
 
-  return continueResponse()
+  return next(true)
 }
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - uploads (public user uploads)
-     * - api/auth (NextAuth endpoints)
-     */
     '/((?!_next/static|_next/image|favicon.ico|uploads|api/auth).*)',
   ],
 }
