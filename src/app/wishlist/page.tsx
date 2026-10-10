@@ -22,22 +22,22 @@ import useCartStore from '@/store/cartStore'
 /**
  * Raw category data returned by an API or legacy persisted state.
  */
-interface WishlistCategory {
-  id?: string
-  name?: string
-  slug?: string
-}
+// interface WishlistCategory {
+//   id?: string
+//   name?: string
+//   slug?: stringgit
+// }
 
 /**
  * Raw wishlist item. The category can be an object or a string.
  */
-interface RawWishlistItem {
-  id: string
-  name: string
-  price: number
-  images?: string[]
-  category?: string | WishlistCategory | null
-}
+// interface RawWishlistItem {
+//   id: string
+//   name: string
+//   price: number
+//   images?: string[]
+//   category?: string | WishlistCategory | null
+// }
 
 /**
  * Normalized item used by the UI.
