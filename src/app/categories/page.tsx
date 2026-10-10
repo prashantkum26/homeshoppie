@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers' // <-- ADD THIS
 
 import CategoriesClient from './CategoriesClient'
 
@@ -9,14 +10,11 @@ import { absoluteUrl } from '@/lib/seo/utils'
 
 export const metadata: Metadata = {
   title: 'Shop Indian Food & Products by Category | HomeShoppie',
-
   description:
     'Explore HomeShoppie categories and shop authentic Indian foods, traditional snacks, groceries, pooja items and more online.',
-
   alternates: {
     canonical: absoluteUrl('/categories'),
   },
-
   robots: {
     index: true,
     follow: true,
@@ -28,7 +26,6 @@ export const metadata: Metadata = {
       'max-video-preview': -1,
     },
   },
-
   openGraph: {
     type: 'website',
     locale: SEO_CONFIG.locale,
@@ -38,7 +35,6 @@ export const metadata: Metadata = {
     description:
       'Explore HomeShoppie categories and shop authentic Indian foods, traditional snacks, groceries, pooja items and more online.',
   },
-
   twitter: {
     card: 'summary_large_image',
     title: 'Shop Indian Food & Products by Category | HomeShoppie',
@@ -47,7 +43,13 @@ export const metadata: Metadata = {
   },
 }
 
-export default function CategoriesPage() {
+// Ensure the component is async
+// Ensure the component is async
+export default async function CategoriesPage() {
+  // Opts the page into dynamic rendering so Next.js applies the middleware's nonce to its scripts
+  const headersList = await headers() // <-- ADD 'await' HERE
+  const nonce = headersList.get('x-nonce') || undefined
+
   const breadcrumbJsonLd = breadcrumbSchema([
     {
       name: 'Home',
@@ -61,8 +63,7 @@ export default function CategoriesPage() {
 
   return (
     <>
-      <JsonLd data={breadcrumbJsonLd} />
-
+      <JsonLd data={breadcrumbJsonLd} nonce={nonce} />
       <CategoriesClient />
     </>
   )
