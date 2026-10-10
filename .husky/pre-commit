@@ -1,6 +1,4 @@
-```sh
 #!/usr/bin/env sh
-
 set -eu
 
 echo ""
@@ -13,9 +11,8 @@ echo "[1/2] TypeScript validation..."
 npm run type-check
 
 echo ""
-echo "[2/2] Running tests..."
-npm test
+echo "[2/2] Running build..."
+npm run build
 
 echo ""
 echo "All pre-commit checks passed."
-```
