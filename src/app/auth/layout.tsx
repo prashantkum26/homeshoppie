@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { headers } from 'next/headers'
 
 export const metadata: Metadata = {
   robots: {
@@ -7,10 +8,11 @@ export const metadata: Metadata = {
   },
 }
 
-export default function AuthLayout({
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  await headers()
   return children
 }

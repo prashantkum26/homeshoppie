@@ -1,21 +1,23 @@
-import { Geist, Geist_Mono } from "next/font/google";
-import "./globals.css";
-import { Toaster } from 'react-hot-toast';
-import Header from '@/components/Header';
-import Footer from '@/components/Footer';
-import Providers from '@/components/Providers';
-import type { Metadata } from 'next';
+import { Geist, Geist_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
+import type { Metadata } from 'next'
+import { Toaster } from 'react-hot-toast'
+
+import './globals.css'
+import Header from '@/components/Header'
+import Footer from '@/components/Footer'
+import Providers from '@/components/Providers'
 import { SEO_CONFIG } from '@/lib/seo/config'
 
 const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+  variable: '--font-geist-sans',
+  subsets: ['latin'],
+})
 
 const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+})
 
 export const metadata: Metadata = {
   metadataBase: new URL(SEO_CONFIG.siteUrl),
@@ -26,9 +28,7 @@ export const metadata: Metadata = {
   },
 
   description: SEO_CONFIG.description,
-
   keywords: [...SEO_CONFIG.keywords],
-
   applicationName: SEO_CONFIG.siteName,
 
   authors: [
@@ -39,7 +39,6 @@ export const metadata: Metadata = {
   ],
 
   creator: SEO_CONFIG.siteName,
-
   publisher: SEO_CONFIG.siteName,
 
   alternates: {
@@ -49,7 +48,6 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-
     googleBot: {
       index: true,
       follow: true,
@@ -66,7 +64,6 @@ export const metadata: Metadata = {
     siteName: SEO_CONFIG.siteName,
     title: SEO_CONFIG.defaultTitle,
     description: SEO_CONFIG.description,
-
     images: [
       {
         url: '/images/og/homepage.jpg',
@@ -113,21 +110,30 @@ export const metadata: Metadata = {
 }
 
 interface RootLayoutProps {
-  children: React.ReactNode;
+  children: React.ReactNode
 }
 
-export default function RootLayout({ children }: RootLayoutProps) {
+export default async function RootLayout({
+  children,
+}: RootLayoutProps) {
+  // Read the request-specific CSP nonce supplied by src/proxy.ts.
+  const requestHeaders = await headers()
+  const nonce = requestHeaders.get('x-nonce') ?? undefined
+
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable}`}
+      >
         <Providers>
-          <div className="flex flex-col min-h-screen">
+          <div className="flex min-h-screen flex-col">
             <Header />
-            <main className="flex-1">
-              {children}
-            </main>
+
+            <main className="flex-1">{children}</main>
+
             <Footer />
           </div>
+
           <Toaster
             position="bottom-right"
             toastOptions={{
@@ -141,5 +147,5 @@ export default function RootLayout({ children }: RootLayoutProps) {
         </Providers>
       </body>
     </html>
-  );
+  )
 }
