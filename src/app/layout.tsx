@@ -117,8 +117,7 @@ export default async function RootLayout({
   children,
 }: RootLayoutProps) {
   // Read the request-specific CSP nonce supplied by src/proxy.ts.
-  const requestHeaders = await headers()
-  const nonce = requestHeaders.get('x-nonce') ?? undefined
+  await headers()
 
   return (
     <html lang="en">
