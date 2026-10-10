@@ -28,6 +28,8 @@
     "@prisma/client": "^5.7.1",
     "@tailwindcss/postcss": "^4.1.17",
     "@types/nodemailer": "^7.0.4",
+    "@upstash/ratelimit": "^2.2.0",
+    "@upstash/redis": "^1.39.0",
     "axios": "^1.13.2",
     "bcryptjs": "^2.4.3",
     "clsx": "^2.1.1",
